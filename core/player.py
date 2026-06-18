@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 
-from entity import Entity, AttributeValidationError
+from core.entity import Entity, AttributeValidationError
 
 
 # Lista dos 6 atributos básicos de D&D
@@ -84,12 +84,7 @@ class Player(Entity):
 
         self.prepare_attributes()
 
-        # Se o jogador ainda não tiver habilidades,
-        # recebe automaticamente as habilidades da classe escolhida.
-        if len(self.skills) == 0:
-            self.add_class_skills()
-
-    # Garante que todos os atributos básicos existem e são válidos
+        # Garante que todos os atributos básicos existem e são válidos
     def prepare_attributes(self):
         for ability_name, default_value in DEFAULT_ATTRIBUTES.items():
             if ability_name not in self.attributes:
