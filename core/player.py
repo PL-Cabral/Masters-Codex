@@ -44,45 +44,14 @@ RACE_BONUSES = {
     },
 }
 
-# Classes disponíveis na versão simples do sistema
-# Cada classe possui 5 habilidades fixas
-CLASS_SKILLS = {
-    "fighter": [
-        "Second Wind",
-        "Action Surge",
-        "Weapon Training",
-        "Shield Block",
-        "Extra Attack",
-    ],
-    "wizard": [
-        "Magic Missile",
-        "Fire Bolt",
-        "Mage Armor",
-        "Detect Magic",
-        "Arcane Recovery",
-    ],
-    "cleric": [
-        "Healing Word",
-        "Sacred Flame",
-        "Bless",
-        "Turn Undead",
-        "Divine Aid",
-    ],
-    "rogue": [
-        "Sneak Attack",
-        "Cunning Action",
-        "Lockpick",
-        "Evasion",
-        "Backstab",
-    ],
-    "barbarian": [
-        "Rage",
-        "Reckless Attack",
-        "Danger Sense",
-        "Brutal Strike",
-        "Strong Body",
-    ],
-}
+# Classes disponíveis
+ALLOWED_CLASSES = [
+    "fighter",
+    "wizard",
+    "cleric",
+    "rogue",
+    "barbarian",
+]
 
 @dataclass
 class Player(Entity):
@@ -104,7 +73,7 @@ class Player(Entity):
         self.character_class = self.character_class.strip().lower()
         self.race = self.race.strip().lower()
 
-        if self.character_class not in CLASS_SKILLS:
+        if self.character_class not in ALLOWED_CLASSES:
             raise AttributeValidationError("Classe inválida.")
 
         if self.race not in RACE_BONUSES:
@@ -154,14 +123,19 @@ class Player(Entity):
                 self.attributes[ability_name] = 30
 
     # Adiciona as 5 habilidades da classe escolhida
-    def add_class_skills(self):
-        for skill_name in CLASS_SKILLS[self.character_class]:
-            skill = {
-                "name": skill_name,
-                "class": self.character_class,
-            }
+    def add_custom_skill(self, skill_name, description=""):
+        skill_name = skill_name.strip()
+        description = description.strip()
 
-            self.add_skill(skill)
+        if skill_name == "":
+            raise AttributeValidationError("A habilidade precisa ter um nome.")
+
+        skill = {
+            "name": skill_name,
+            "description": description,
+        }
+
+        self.add_skill(skill)
 
     # Calcula o modificador de atributo no estilo D&D
     # Ex: atributo 10 = 0, atributo 14 = +2, atributo 8 = -1
