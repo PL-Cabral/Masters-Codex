@@ -1,7 +1,7 @@
 import json
-from player import Player, ABILITY_NAMES
-from entity import AttributeValidationError
-from dice import Die, execute_roll_command  # Importando o sistema de dados que criamos
+from core.player import Player, ABILITY_NAMES
+from core.entity import AttributeValidationError
+from engine.Dices import Die, execute_roll_command  # Importando o sistema de dados que criamos
 
 # Banco de dados temporário em memória para guardar os personagens criados
 players_database = {}
