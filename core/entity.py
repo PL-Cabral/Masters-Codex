@@ -1,3 +1,4 @@
+from utility.exceptions import AttributeValidationError, DuplicateSkillError, EntityCannotActError
 # ABC e abstractmethod permitem criar uma classe abstrata
 from abc import ABC, abstractmethod
 
@@ -9,18 +10,6 @@ from dataclasses import dataclass, field
 
 # uuid4 gera um ID único para cada entidade
 from uuid import uuid4
-
-# Criação de erros personalizados
-class AttributeValidationError(Exception):
-    pass
-
-
-class EntityCannotActError(Exception):
-    pass
-
-
-class DuplicateSkillError(Exception):
-    pass
 
 # Criação da classe abstrata Entidade e seus parâmetros
 @dataclass
