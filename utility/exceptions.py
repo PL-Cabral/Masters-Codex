@@ -7,3 +7,6 @@ class EntityCannotActError(Exception):
 
 class DuplicateSkillError(Exception):
     pass
+
+class UserValidationError(Exception):
+    pass
