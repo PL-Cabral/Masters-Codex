@@ -10,3 +10,9 @@ class DuplicateSkillError(Exception):
 
 class UserValidationError(Exception):
     pass
+
+class PermissionDeniedError(Exception):
+    pass
+
+class TableValidationError(Exception):
+    pass
