@@ -2,7 +2,6 @@ from dataclasses import dataclass, field
 from core.entity import Entity
 from utility.exceptions import AttributeValidationError
 
-
 # Lista dos 6 atributos básicos de D&D
 ABILITY_NAMES = [
     "strength",
