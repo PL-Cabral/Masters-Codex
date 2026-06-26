@@ -42,3 +42,48 @@ Masters-Codex/
 ├── secrets/             # Chaves privadas (ignorado no .gitignore)
 ├── main.py              # Ponto de entrada e interface de terminal (Menu)
 └── README.md            # Documentação do projeto
+
+```
+## Como Executar o Projeto
+
+### Pré-requisitos
+Certifique-se de ter o **Python 3.8+** instalado na sua máquina.
+
+1. Clone este repositório:
+   ```bash
+   git clone [https://github.com/PL-Cabral/Masters-Codex.git](https://github.com/PL-Cabral/Masters-Codex.git)
+   cd Masters-Codex
+
+```
+```
+2. Instale as dependências (Firebase Admin SDK):
+  ```bash
+  pip install firebase-admin
+
+```
+
+
+3. Configure o Banco de Dados (Firebase):
+* Crie um projeto no Firebase e ative o **Realtime Database**.
+* Gere uma nova chave privada (Service Account) no console do Firebase.
+* Crie uma pasta chamada `secrets` na raiz do projeto e salve o arquivo JSON baixado dentro dela com o nome `firebase_key.json`.
+
+
+
+### Executando
+
+Para iniciar o sistema e abrir o menu interativo no terminal, execute:
+
+```bash
+python main.py
+
+```
+
+*(Caso a equipe tenha configurado o Makefile, você também pode utilizar o atalho `make run`)*.
+
+---
+
+## Equipe Desenvolvedora
+
+* **[Maria Luiza de Araújo / Matrícula]** * **[Pedro Henrique Estevam Elias / 20250035315]** * **[Pedro Lima Cabral / 20250049660]** * Desenvolvido para a disciplina de Linguagem de Programação.
+
