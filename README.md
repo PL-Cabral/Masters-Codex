@@ -85,5 +85,5 @@ python main.py
 
 ## Equipe Desenvolvedora
 
-* **[Maria Luiza de Araújo / Matrícula]** * **[Pedro Henrique Estevam Elias / 20250035315]** * **[Pedro Lima Cabral / 20250049660]** * Desenvolvido para a disciplina de Linguagem de Programação.
+* **[Maria Luiza de Araújo / 20250032627]** * **[Pedro Henrique Estevam Elias / 20250035315]** * **[Pedro Lima Cabral / 20250049660]** * Desenvolvido para a disciplina de Linguagem de Programação.
 
