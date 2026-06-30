@@ -1,207 +1,293 @@
-import json
-from core.player import Player, ABILITY_NAMES
-from core.entity import AttributeValidationError
-from engine.Dices import Die, execute_roll_command  # Importando o sistema de dados que criamos
+from core.table import Table
+from core.monster import Monster
+from core.npc import NPC
 
-# Banco de dados temporário em memória para guardar os personagens criados
-players_database = {}
+from core.users.master_user import MasterUser
+from core.users.player_user import PlayerUser
 
-def create_new_character():
-    """Menu para criação de um novo personagem passo a passo."""
-    print("\n=== CRIAR NOVO PERSONAGEM ===")
-    name = input("Nome do personagem: ").strip()
-    if not name:
-        print("Erro: O nome não pode ser vazio.")
-        return None
+# Firebase opcional
+firebase_enabled = False
+firebase_error = None
 
-    try:
-        max_hp = int(input("HP Máximo (ex: 20): "))
-        
-        print("\nClasses disponíveis: fighter, wizard, cleric, rogue, barbarian")
-        character_class = input("Escolha a classe: ").strip().lower()
-        
-        print("\nRaças disponíveis: human, elf, dwarf")
-        race = input("Escolha a raça: ").strip().lower()
-        
-        print("\n--- Definição de Atributos (Valores base entre 1 e 30) ---")
-        attributes = {}
-        for ability in ABILITY_NAMES:
-            val = int(input(f"Valor base para {ability.capitalize()} (padrão 10): ") or 10)
-            attributes[ability] = val
+try:
+    from services.firebase_service import save_table
+    from services.firebase_service import get_table
+    from services.firebase_service import save_entity
+    from services.firebase_service import save_user
+    firebase_enabled = True
+except Exception as error:
+    firebase_error = error
 
-        # Instancia o novo jogador utilizando a classe existente
-        new_player = Player(
-            name=name,
-            max_hp=max_hp,
-            character_class=character_class,
-            race=race,
-            attributes=attributes
-        )
-        
-        players_database[new_player.name.lower()] = new_player
-        print(f"\n[Sucesso] {new_player.name} foi criado e salvo com sucesso!")
-        return new_player
+local_tables = {}
 
-    except ValueError:
-        print("Erro: Entrada inválida. Certifique-se de digitar números onde necessário.")
-        return None
-    except AttributeValidationError as e:
-        print(f"Erro de validação do sistema: {e}")
-        return None
+def print_header():
+    print("\n" + "-" * 65)
+    print("MASTER'S CODEX")
+    print("D&D SESSION MANAGEMENT SYSTEM")
+    print("-" * 65)
 
-def select_character():
-    """Menu para selecionar um personagem existente."""
-    if not players_database:
-        print("\nNenhum personagem cadastrado ainda. Crie um novo!")
-        return None
-    
-    print("\n=== SELECIONAR PERSONAGEM ===")
-    for idx, name in enumerate(players_database.keys(), 1):
-        print(f"{idx}. {players_database[name].name}")
-    
-    choice = input("Digite o nome do personagem que vai jogar: ").strip().lower()
-    if choice in players_database:
-        return players_database[choice]
+    if firebase_enabled:
+        print("Modo atual: FIREBASE CLOUD")
     else:
-        print("Personagem não encontrado.")
+        print("Modo atual: LOCAL BACKUP")
+
+def separator():
+    print("-" * 65)
+
+def persist_table(table):
+    # Tenta salvar no Firebase. Se falhar, salva localmente.
+    global firebase_enabled
+
+    if firebase_enabled:
+        try:
+            save_table(table)
+            print("Mesa sincronizada com Firebase.")
+            return
+        except Exception as error:
+            print("\nFirebase indisponível.")
+            print(error)
+            firebase_enabled = False
+
+    local_tables[table.id] = table
+    print("Mesa salva localmente.")
+
+def load_table(table_id):
+    if firebase_enabled:
+        try:
+            return get_table(table_id)
+        except Exception as error:
+            print("Erro ao carregar do Firebase:")
+            print(error)
+
+    return local_tables.get(table_id)
+
+def login_menu():
+    print("\nLOGIN")
+    print("1 - Mestre")
+    print("2 - Jogador")
+    print("0 - Sair")
+
+    return input("Escolha: ")
+
+def master_start_menu():
+    print("\nMESTRE")
+    print("1 - Criar mesa")
+    print("2 - Entrar em mesa existente")
+    print("0 - Logout")
+
+    return input("Escolha: ")
+
+def master_menu():
+    print("\nPAINEL DO MESTRE")
+    print("1 - Ver mesa")
+    print("2 - Adicionar entidade")
+    print("3 - Alterar estado da sessão")
+    print("4 - Adicionar log")
+    print("0 - Logout")
+
+    return input("Escolha: ")
+
+def player_menu():
+    print("\nPAINEL DO JOGADOR")
+    print("1 - Ver mesa")
+    print("0 - Logout")
+
+    return input("Escolha: ")
+
+def show_table(table):
+    separator()
+
+    print("Mesa:", table.name)
+    print("Table ID:", table.id)
+    print("Master ID:", table.master_user_id)
+    print("Estado:", table.session.state)
+    print("Players:", len(table.players))
+    print("Entities:", len(table.entities))
+
+    if table.players:
+        print("\nJogadores:")
+        for player in table.players:
+            print("-", player["username"])
+
+    if table.entities:
+        print("\nEntidades:")
+        for entity in table.entities:
+            print("-", entity["name"], f"({entity['type']})")
+
+    separator()
+
+def create_entity():
+    print("\nCRIAR ENTIDADE")
+    print("1 - Monster")
+    print("2 - NPC")
+    print("0 - Cancelar")
+
+    choice = input("Escolha: ")
+
+    if choice == "0":
         return None
 
-def handle_roll_dice(current_player):
-    """Executa a rolagem escolhendo o tipo de teste e os dados utilizados."""
-    print("\n=== TESTE DE ATRIBUTO / ROLAGEM ===")
-    print("Escolha o atributo para o teste:")
-    for idx, ability in enumerate(ABILITY_NAMES, 1):
-        print(f"{idx}. {ability.capitalize()}")
-    
-    try:
-        attr_choice = int(input("Escolha o número do atributo: ")) - 1
-        if attr_choice < 0 or attr_choice >= len(ABILITY_NAMES):
-            print("Opção inválida.")
-            return
-        
-        selected_ability = ABILITY_NAMES[attr_choice]
-        
-        print("\nQuais dados você deseja rolar para esse teste?")
-        print("Formatos aceitos (d4, d6, d10, d20, d100)")
-        
-        # Monta a seleção de dados interativamente
-        dice_selection = {}
-        for sides in [4, 6, 10, 20, 100]:
-            qty = int(input(f"Quantos d{sides} quer rolar? (0 para nenhum): ") or 0)
-            if qty > 0:
-                dice_selection[sides] = qty
-                
-        if not dice_selection:
-            print("Nenhum dado selecionado. Teste cancelado.")
-            return
+    name = input("Nome: ")
+    hp = int(input("HP máximo: "))
+    level = int(input("Nível: "))
 
-        # 1. Executa a nossa função de rolagem original ordenada por tipo de dado
-        roll_payload = execute_roll_command(dice_selection)
-        
-        if roll_payload.get("status") == "error":
-            print(f"Erro na rolagem: {roll_payload.get('message')}")
-            return
-            
-        # 2. Resgata o total bruto dos dados rolados
-        dice_total = roll_payload["total_score"]
-        
-        # 3. Executa a ação da sua classe Player para computar o modificador de atributo
-        action_result = current_player.perform_action(
-            action_name=f"Teste de {selected_ability.capitalize()}",
-            ability_name=selected_ability,
-            dice_result=dice_total
+    if choice == "1":
+        entity = Monster(
+            name=name,
+            max_hp=hp,
+            level=level
         )
-        
-        # 4. Apresenta o retorno final estruturado para a API / Codex do Mestre
-        print("\n" + "="*40)
-        print("  RESULTADO ENVIADO AO MASTER'S CODEX")
-        print("="*40)
-        
-        # Customizando o print final para mostrar exatamente o que foi pedido
-        api_output = {
-            "status": "success",
-            "player": current_player.name,
-            "teste": f"Modificador de {selected_ability.capitalize()}: {action_result['modifier']}",
-            "dados_rolados": roll_payload["rolls"],
-            "total_dados": dice_total,
-            "total_com_atributos": action_result["total"]
-        }
-        
-        print(json.dumps(api_output, indent=2, ensure_ascii=False))
-        print("="*40)
-        
-    except ValueError:
-        print("Por favor, insira valores numéricos válidos.")
 
-def main_game_loop():
-    """Gerencia os menus principal e secundário do sistema."""
-    current_player = None
-    
-    # Adicionando um personagem de exemplo para facilitar os testes iniciais
-    example = Player(name="Arthas", max_hp=20, character_class="fighter", race="human")
-    players_database["arthas"] = example
+        return entity
+
+    elif choice == "2":
+        entity = NPC(
+            name=name,
+            max_hp=hp,
+            level=level
+        )
+
+        return entity
+
+    print("Opção inválida.")
+    return None
+
+def main():
+    print_header()
 
     while True:
-        # MENU INICIAL: Se não houver jogador selecionado
-        if current_player is None:
-            print("\n=================================")
-            print("    MASTER'S CODEX - INITIAL     ")
-            print("=================================")
-            print("1. Escolher Personagem Existente")
-            print("2. Criar Novo Personagem (Ficha)")
-            print("3. Sair do Sistema")
-            print("=================================")
-            
-            opcao = input("Escolha uma opção: ").strip()
-            
-            if opcao == "1":
-                current_player = select_character()
-            elif opcao == "2":
-                current_player = create_new_character()
-            elif opcao == "3":
-                print("Encerrando Master's Codex. Até a próxima aventura!")
-                break
+        choice = login_menu()
+
+        if choice == "0":
+            print("\nEncerrando sistema...")
+            break
+
+        elif choice == "1":
+            username = input("Nome do mestre: ")
+
+            master = MasterUser(
+                username=username
+            )
+
+            if firebase_enabled:
+                save_user(master)
+
+            current_table = None
+
+            choice = master_start_menu()
+
+            if choice == "0":
+                continue
+
+            elif choice == "1":
+                table_name = input("Nome da mesa: ")
+
+                current_table = Table(
+                    name=table_name,
+                    master_user_id=master.id
+                )
+
+                persist_table(current_table)
+
+                print("\nMesa criada com sucesso.")
+                print("Código da mesa:", current_table.id)
+
+            elif choice == "2":
+                table_id = input("Código da mesa: ")
+
+                current_table = load_table(table_id)
+
+                if current_table is None:
+                    print("Mesa não encontrada.")
+                    continue
+
             else:
                 print("Opção inválida.")
-        
-        # MENU SECUNDÁRIO: Se um jogador já estiver ativo na sessão
+                continue
+
+            while True:
+                choice = master_menu()
+
+                if choice == "0":
+                    break
+
+                elif choice == "1":
+                    show_table(current_table)
+
+                elif choice == "2":
+                    entity = create_entity()
+
+                    if entity is not None:
+                        if firebase_enabled:
+                            save_entity(entity)
+
+                        current_table.add_entity(entity)
+                        persist_table(current_table)
+
+                        print("Entidade adicionada.")
+
+                elif choice == "3":
+                    print("\nEstados:")
+                    print("lobby")
+                    print("exploration")
+                    print("combat")
+                    print("paused")
+                    print("ended")
+
+                    state = input("Novo estado: ")
+
+                    try:
+                        current_table.session.change_state(state)
+                        persist_table(current_table)
+                    except Exception as error:
+                        print(error)
+
+                elif choice == "4":
+                    log = input("Novo log: ")
+                    current_table.add_log(log)
+                    persist_table(current_table)
+
+                else:
+                    print("Opção inválida.")
+
+        elif choice == "2":
+            username = input("Nome do jogador: ")
+
+            player = PlayerUser(
+                username=username
+            )
+
+            if firebase_enabled:
+                save_user(player)
+
+            table_id = input("Código da mesa: ")
+
+            current_table = load_table(table_id)
+
+            if current_table is None:
+                print("Mesa não encontrada.")
+                continue
+
+            current_table.add_player(player)
+            persist_table(current_table)
+
+            print("\nVocê entrou na mesa com sucesso.")
+            print("Seu Player ID:", player.id)
+
+            while True:
+                choice = player_menu()
+
+                if choice == "0":
+                    break
+
+                elif choice == "1":
+                    show_table(current_table)
+
+                else:
+                    print("Opção inválida.")
+
         else:
-            print(f"\n=================================")
-            print(f" JOGADOR ATIVO: {current_player.name.upper()} (Nível {current_player.level})")
-            print("=================================")
-            print("1. Rolar Dados 'Fazer Teste' ")
-            print("2. Adicionar XP ")
-            print("3. Usar Item (Ainda não implementado)")
-            print("4. Trocar de Personagem")
-            print("5. Mostrar Detalhes da Ficha")
-            print("6. Sair do Sistema")
-            print("=================================")
-            
-            opcao = input("O que deseja fazer? ").strip()
-            
-            if opcao == "1":
-                handle_roll_dice(current_player)
-            elif opcao == "2":
-                try:
-                    xp_amount = int(input("Quantidade de XP a adicionar: "))
-                    current_player.gain_xp(xp_amount)
-                    print(f"[XP] {xp_amount} de XP adicionados! Total atual: {current_player.xp}")
-                except ValueError:
-                    print("Por favor, insira um número inteiro.")
-                except AttributeValidationError as e:
-                    print(e)
-            elif opcao == "3":
-                print("\n[Inventário] O sistema de inventário será integrado aqui no futuro.")
-            elif opcao == "4":
-                current_player = None  # Reseta o jogador ativo para voltar ao menu inicial
-                print("\nTrocando de personagem...")
-            elif opcao == "5":
-                print("\n" + current_player.show_details())
-            elif opcao == "6":
-                print("Encerrando Master's Codex. Até a próxima aventura!")
-                break
-            else:
-                print("Opção inválida.")
+            print("Opção inválida.")
 
 if __name__ == "__main__":
-    main_game_loop()
+    main()
