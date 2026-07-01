@@ -128,8 +128,18 @@ def create_entity():
         return None
 
     name = input("Nome: ")
-    hp = int(input("HP máximo: "))
-    level = int(input("Nível: "))
+    while True:
+        try:
+            hp = int(input("HP máximo: "))
+            break
+        except ValueError:
+            print("Digite um número válido.")
+    while True:
+        try:
+            level = int(input("Nível: "))
+            break
+        except ValueError:
+            print("Digite um número válido.")
 
     if choice == "1":
         entity = Monster(
