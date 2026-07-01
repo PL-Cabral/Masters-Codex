@@ -1,17 +1,29 @@
+from pathlib import Path
+
+import firebase_admin
 from firebase_admin import credentials
 from firebase_admin import db
-import firebase_admin
 
 from core.table import Table
-from core.entity import Entity
-from core.users.user import User
+from core.player import Player
+from core.monster import Monster
+from core.npc import NPC
 
-FIREBASE_CREDENTIALS_PATH = "secrets/firebase_key.json"
+from core.users.master_user import MasterUser
+from core.users.player_user import PlayerUser
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+
+FIREBASE_CREDENTIALS_PATH = (
+    BASE_DIR / "secrets" / "firebase_key.json"
+)
 
 DATABASE_URL = ("https://masters-codex-default-rtdb.firebaseio.com/")
 
 if not firebase_admin._apps:
-    cred = credentials.Certificate(FIREBASE_CREDENTIALS_PATH)
+    cred = credentials.Certificate(
+        FIREBASE_CREDENTIALS_PATH
+    )
 
     firebase_admin.initialize_app(
         cred,
@@ -40,6 +52,14 @@ def get_user(user_id):
 
     if data is None:
         return None
+
+    user_type = data.get("user_type")
+
+    if user_type == "master":
+        return MasterUser.from_dict(data)
+
+    if user_type == "player":
+        return PlayerUser.from_dict(data)
 
     return data
 
@@ -101,6 +121,17 @@ def get_entity(entity_id):
     if data is None:
         return None
 
+    entity_type = data.get("entity_type")
+
+    if entity_type == "player":
+        return Player.from_dict(data)
+
+    if entity_type == "monster":
+        return Monster.from_dict(data)
+
+    if entity_type == "npc":
+        return NPC.from_dict(data)
+
     return data
 
 def delete_entity(entity_id):
@@ -109,6 +140,27 @@ def delete_entity(entity_id):
     )
 
     ref.delete()
+
+def entity_exists(entity_id):
+    ref = db.reference(
+        f"entities/{entity_id}"
+    )
+
+    return ref.get() is not None
+
+def table_exists(table_id):
+    ref = db.reference(
+        f"tables/{table_id}"
+    )
+
+    return ref.get() is not None
+
+def user_exists(user_id):
+    ref = db.reference(
+        f"users/{user_id}"
+    )
+
+    return ref.get() is not None
 
 def ping_database():
     ref = db.reference("/")
