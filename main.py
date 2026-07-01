@@ -14,6 +14,7 @@ try:
     from services.firebase_service import get_table
     from services.firebase_service import save_entity
     from services.firebase_service import save_user
+    from services.firebase_service import get_entity
     firebase_enabled = True
 except Exception as error:
     firebase_error = error
@@ -35,7 +36,6 @@ def separator():
     print("-" * 65)
 
 def persist_table(table):
-    # Tenta salvar no Firebase. Se falhar, salva localmente.
     global firebase_enabled
 
     if firebase_enabled:
@@ -102,17 +102,31 @@ def show_table(table):
     print("Master ID:", table.master_user_id)
     print("Estado:", table.session.state)
     print("Players:", len(table.players))
-    print("Entities:", len(table.entities))
+    print("Entities:", len(table.entity_ids))
 
     if table.players:
         print("\nJogadores:")
         for player in table.players:
             print("-", player["username"])
 
-    if table.entities:
+    if table.entity_ids:
         print("\nEntidades:")
-        for entity in table.entities:
-            print("-", entity["name"], f"({entity['type']})")
+
+        for entity_id in table.entity_ids:
+            try:
+                entity = get_entity(entity_id)
+
+                if entity is not None:
+                    print(
+                        "-",
+                        entity.name,
+                        f"({entity.entity_type})"
+                    )
+                else:
+                    print("-", entity_id, "(não encontrada)")
+
+            except Exception:
+                print("-", entity_id)
 
     separator()
 
@@ -128,12 +142,14 @@ def create_entity():
         return None
 
     name = input("Nome: ")
+
     while True:
         try:
             hp = int(input("HP máximo: "))
             break
         except ValueError:
             print("Digite um número válido.")
+
     while True:
         try:
             level = int(input("Nível: "))
@@ -142,22 +158,18 @@ def create_entity():
             print("Digite um número válido.")
 
     if choice == "1":
-        entity = Monster(
+        return Monster(
             name=name,
             max_hp=hp,
             level=level
         )
-
-        return entity
 
     elif choice == "2":
-        entity = NPC(
+        return NPC(
             name=name,
             max_hp=hp,
             level=level
         )
-
-        return entity
 
     print("Opção inválida.")
     return None
