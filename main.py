@@ -20,6 +20,7 @@ except Exception as error:
     firebase_error = error
 
 local_tables = {}
+local_entities = {}
 
 def print_header():
     print("\n" + "-" * 65)
@@ -51,6 +52,19 @@ def persist_table(table):
     local_tables[table.id] = table
     print("Mesa salva localmente.")
 
+def persist_entity(entity):
+    global firebase_enabled
+
+    if firebase_enabled:
+        try:
+            save_entity(entity)
+            return
+        except Exception as error:
+            print(error)
+            firebase_enabled = False
+
+    local_entities[entity.id] = entity
+
 def load_table(table_id):
     if firebase_enabled:
         try:
@@ -60,6 +74,15 @@ def load_table(table_id):
             print(error)
 
     return local_tables.get(table_id)
+
+def load_entity(entity_id):
+    if firebase_enabled:
+        try:
+            return get_entity(entity_id)
+        except Exception:
+            pass
+
+    return local_entities.get(entity_id)
 
 def login_menu():
     print("\nLOGIN")
@@ -114,7 +137,7 @@ def show_table(table):
 
         for entity_id in table.entity_ids:
             try:
-                entity = get_entity(entity_id)
+                entity = load_entity(entity_id)
 
                 if entity is not None:
                     print(
