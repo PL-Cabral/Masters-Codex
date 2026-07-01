@@ -61,7 +61,37 @@ def get_user(user_id):
     if user_type == "player":
         return PlayerUser.from_dict(data)
 
-    return data
+    raise ValueError(
+        f"Tipo de usuário inválido: {user_type}"
+    )
+
+def get_user_by_username(username):
+    username = username.strip()
+
+    if username == "":
+        return None
+
+    ref = db.reference("users")
+    users = ref.get()
+
+    if users is None:
+        return None
+
+    for _, user_data in users.items():
+        if user_data.get("username") == username:
+            user_type = user_data.get("user_type")
+
+            if user_type == "master":
+                return MasterUser.from_dict(user_data)
+
+            if user_type == "player":
+                return PlayerUser.from_dict(user_data)
+
+            raise ValueError(
+                f"Tipo de usuário inválido: {user_type}"
+            )
+
+    return None
 
 def delete_user(user_id):
     ref = db.reference(
@@ -132,7 +162,9 @@ def get_entity(entity_id):
     if entity_type == "npc":
         return NPC.from_dict(data)
 
-    return data
+    raise ValueError(
+        f"Tipo de entidade inválido: {entity_type}"
+    )
 
 def delete_entity(entity_id):
     ref = db.reference(
