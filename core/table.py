@@ -11,7 +11,7 @@ class Table:
     id: str = field(default_factory=lambda: str(uuid4()))
 
     players: list = field(default_factory=list)
-    entities: list = field(default_factory=list)
+    entity_ids: list = field(default_factory=list)
 
     logs: list = field(default_factory=list)
 
@@ -20,6 +20,11 @@ class Table:
     )
 
     def __post_init__(self):
+        if not isinstance(self.name, str):
+            raise TableValidationError(
+                "Nome da mesa inválido."
+            )
+
         self.name = self.name.strip()
 
         if self.name == "":
@@ -27,7 +32,12 @@ class Table:
                 "A mesa precisa ter um nome."
             )
 
-        if not self.master_user_id:
+        if not isinstance(self.master_user_id, str):
+            raise TableValidationError(
+                "ID de mestre inválido."
+            )
+
+        if self.master_user_id.strip() == "":
             raise TableValidationError(
                 "A mesa precisa de um mestre."
             )
@@ -50,24 +60,20 @@ class Table:
         ]
 
     def add_entity(self, entity):
-        for existing_entity in self.entities:
-            if existing_entity["id"] == entity.id:
-                return
-
-        self.entities.append({
-            "id": entity.id,
-            "name": entity.name,
-            "type": entity.entity_type
-        })
+        if entity.id not in self.entity_ids:
+            self.entity_ids.append(entity.id)
 
     def remove_entity(self, entity_id):
-        self.entities = [
-            entity
-            for entity in self.entities
-            if entity["id"] != entity_id
+        self.entity_ids = [
+            existing_entity_id
+            for existing_entity_id in self.entity_ids
+            if existing_entity_id != entity_id
         ]
 
     def add_log(self, message):
+        if not isinstance(message, str):
+            return
+
         message = message.strip()
 
         if message:
@@ -82,26 +88,31 @@ class Table:
             "name": self.name,
             "master_user_id": self.master_user_id,
             "players": self.players,
-            "entities": self.entities,
+            "entity_ids": self.entity_ids,
             "logs": self.logs,
             "session": self.session.to_dict()
         }
 
     @classmethod
     def from_dict(cls, data):
-        table = cls(
-            id=data["id"],
-            name=data["name"],
-            master_user_id=data["master_user_id"]
-        )
+        try:
+            table = cls(
+                id=data["id"],
+                name=data["name"],
+                master_user_id=data["master_user_id"]
+            )
+        except KeyError as error:
+            raise TableValidationError(
+                f"Campo ausente na mesa: {error}"
+            )
 
         table.players = data.get(
             "players",
             []
         )
 
-        table.entities = data.get(
-            "entities",
+        table.entity_ids = data.get(
+            "entity_ids",
             []
         )
 
@@ -125,7 +136,7 @@ class Table:
         return (
             f"Mesa '{self.name}' | "
             f"Players: {len(self.players)} | "
-            f"Entities: {len(self.entities)}"
+            f"Entities: {len(self.entity_ids)}"
         )
 
     def __repr__(self):
@@ -133,6 +144,6 @@ class Table:
             f"Table("
             f"name='{self.name}', "
             f"players={len(self.players)}, "
-            f"entities={len(self.entities)}"
+            f"entities={len(self.entity_ids)}"
             f")"
         )
