@@ -1,6 +1,7 @@
 from core.table import Table
 from core.monster import Monster
 from core.npc import NPC
+from core.player import Player
 
 from core.users.master_user import MasterUser
 from core.users.player_user import PlayerUser
@@ -15,12 +16,14 @@ try:
     from services.firebase_service import save_entity
     from services.firebase_service import save_user
     from services.firebase_service import get_entity
+    from services.firebase_service import get_user_by_username
     firebase_enabled = True
 except Exception as error:
     firebase_error = error
 
 local_tables = {}
 local_entities = {}
+local_users = {}
 
 def print_header():
     print("\n" + "-" * 65)
@@ -65,6 +68,19 @@ def persist_entity(entity):
 
     local_entities[entity.id] = entity
 
+def persist_user(user):
+    global firebase_enabled
+
+    if firebase_enabled:
+        try:
+            save_user(user)
+            return
+        except Exception as error:
+            print(error)
+            firebase_enabled = False
+
+    local_users[user.username] = user
+
 def load_table(table_id):
     if firebase_enabled:
         try:
@@ -83,6 +99,15 @@ def load_entity(entity_id):
             pass
 
     return local_entities.get(entity_id)
+
+def load_user(username):
+    if firebase_enabled:
+        try:
+            return get_user_by_username(username)
+        except Exception:
+            pass
+
+    return local_users.get(username)
 
 def login_menu():
     print("\nLOGIN")
@@ -113,6 +138,8 @@ def master_menu():
 def player_menu():
     print("\nPAINEL DO JOGADOR")
     print("1 - Ver mesa")
+    print("2 - Criar personagem")
+    print("3 - Ver personagem")
     print("0 - Logout")
 
     return input("Escolha: ")
@@ -136,19 +163,15 @@ def show_table(table):
         print("\nEntidades:")
 
         for entity_id in table.entity_ids:
-            try:
-                entity = load_entity(entity_id)
+            entity = load_entity(entity_id)
 
-                if entity is not None:
-                    print(
-                        "-",
-                        entity.name,
-                        f"({entity.entity_type})"
-                    )
-                else:
-                    print("-", entity_id, "(não encontrada)")
-
-            except Exception:
+            if entity is not None:
+                print(
+                    "-",
+                    entity.name,
+                    f"({entity.entity_type})"
+                )
+            else:
                 print("-", entity_id)
 
     separator()
@@ -197,6 +220,36 @@ def create_entity():
     print("Opção inválida.")
     return None
 
+def create_player_character():
+    print("\nCRIAR PERSONAGEM")
+
+    name = input("Nome: ")
+
+    while True:
+        try:
+            hp = int(input("HP máximo: "))
+            break
+        except ValueError:
+            print("Digite um número válido.")
+
+    while True:
+        try:
+            level = int(input("Nível: "))
+            break
+        except ValueError:
+            print("Digite um número válido.")
+
+    character_class = input("Classe: ")
+    race = input("Raça: ")
+
+    return Player(
+        name=name,
+        max_hp=hp,
+        level=level,
+        character_class=character_class,
+        race=race
+    )
+
 def main():
     print_header()
 
@@ -210,12 +263,13 @@ def main():
         elif choice == "1":
             username = input("Nome do mestre: ")
 
-            master = MasterUser(
-                username=username
-            )
+            master = load_user(username)
 
-            if firebase_enabled:
-                save_user(master)
+            if master is None:
+                master = MasterUser(
+                    username=username
+                )
+                persist_user(master)
 
             current_table = None
 
@@ -263,12 +317,9 @@ def main():
                     entity = create_entity()
 
                     if entity is not None:
-                        if firebase_enabled:
-                            save_entity(entity)
-
+                        persist_entity(entity)
                         current_table.add_entity(entity)
                         persist_table(current_table)
-
                         print("Entidade adicionada.")
 
                 elif choice == "3":
@@ -292,18 +343,16 @@ def main():
                     current_table.add_log(log)
                     persist_table(current_table)
 
-                else:
-                    print("Opção inválida.")
-
         elif choice == "2":
             username = input("Nome do jogador: ")
 
-            player = PlayerUser(
-                username=username
-            )
+            player = load_user(username)
 
-            if firebase_enabled:
-                save_user(player)
+            if player is None:
+                player = PlayerUser(
+                    username=username
+                )
+                persist_user(player)
 
             table_id = input("Código da mesa: ")
 
@@ -313,8 +362,16 @@ def main():
                 print("Mesa não encontrada.")
                 continue
 
-            current_table.add_player(player)
-            persist_table(current_table)
+            already_inside = False
+
+            for table_player in current_table.players:
+                if table_player["id"] == player.id:
+                    already_inside = True
+                    break
+
+            if not already_inside:
+                current_table.add_player(player)
+                persist_table(current_table)
 
             print("\nVocê entrou na mesa com sucesso.")
             print("Seu Player ID:", player.id)
@@ -327,6 +384,38 @@ def main():
 
                 elif choice == "1":
                     show_table(current_table)
+
+                elif choice == "2":
+                    if player.linked_entity_id is not None:
+                        print("Você já possui personagem.")
+                        continue
+
+                    character = create_player_character()
+
+                    persist_entity(character)
+
+                    player.link_entity(character.id)
+                    persist_user(player)
+
+                    current_table.add_entity(character)
+                    persist_table(current_table)
+
+                    print("Personagem criado com sucesso.")
+
+                elif choice == "3":
+                    if player.linked_entity_id is None:
+                        print("Você não possui personagem.")
+                        continue
+
+                    character = load_entity(
+                        player.linked_entity_id
+                    )
+
+                    if character is None:
+                        print("Personagem não encontrado.")
+                    else:
+                        print()
+                        print(character.show_details())
 
                 else:
                     print("Opção inválida.")
