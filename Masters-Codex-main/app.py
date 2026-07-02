@@ -1,7 +1,7 @@
 import os
 from flask import Flask, render_template, request, jsonify
 
-# Descobre o caminho absoluto atual na Vercel e aponta para o diretório templates
+# Força a Vercel a encontrar a pasta templates corretamente
 base_dir = os.path.abspath(os.path.dirname(__file__))
 template_dir = os.path.join(base_dir, 'templates')
 
@@ -9,7 +9,6 @@ app = Flask(__name__, template_folder=template_dir)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "super-secret-key-rpg")
 
 
-# Importações originais do seu projeto
 from core.table import Table
 from core.monster import Monster
 from core.npc import NPC
@@ -20,7 +19,7 @@ from core.users.player_user import PlayerUser
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "super-secret-key-rpg")
 
-# Inicialização do Firebase adaptada do seu main.py
+# Inicialização do Firebase adaptada do main.py
 firebase_enabled = False
 try:
     from services.firebase_service import save_table, get_table, save_entity, save_user, get_entity, get_user_by_username
@@ -33,7 +32,7 @@ local_tables = {}
 local_entities = {}
 local_users = {}
 
-# --- FUNÇÕES DE PERSISTÊNCIA REAPROVEITADAS ---
+# FUNÇÕES DE PERSISTÊNCIA REAPROVEITADAS
 def persist_user(user):
     if firebase_enabled:
         try: save_user(user); return
@@ -70,7 +69,7 @@ def load_entity(entity_id):
         except Exception: pass
     return local_entities.get(entity_id)
 
-# --- ROTAS DA APLICAÇÃO ---
+# ROTAS DA APLICAÇÃO
 
 @app.route('/')
 def index():
