@@ -1,5 +1,13 @@
-from flask import Flask, render_template, request, jsonify, session
 import os
+from flask import Flask, render_template, request, jsonify
+
+# Descobre o caminho absoluto atual na Vercel e aponta para o diretório templates
+base_dir = os.path.abspath(os.path.dirname(__file__))
+template_dir = os.path.join(base_dir, 'templates')
+
+app = Flask(__name__, template_folder=template_dir)
+app.secret_key = os.environ.get("FLASK_SECRET_KEY", "super-secret-key-rpg")
+
 
 # Importações originais do seu projeto
 from core.table import Table

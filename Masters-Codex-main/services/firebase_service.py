@@ -1,36 +1,23 @@
-from pathlib import Path
-
+import os
+import json
 import firebase_admin
 from firebase_admin import credentials
 from firebase_admin import db
 
-from core.table import Table
-from core.player import Player
-from core.monster import Monster
-from core.npc import NPC
 
-from core.users.master_user import MasterUser
-from core.users.player_user import PlayerUser
+firebase_creds = os.environ.get('FIREBASE_CREDENTIALS')
 
-BASE_DIR = Path(__file__).resolve().parent.parent
+if firebase_creds:
+    # Nuvem (Vercel): Carrega credenciais da variável de ambiente
+    cred_dict = json.loads(firebase_creds)
+    cred = credentials.Certificate(cred_dict)
+else:
+    # Local (PC): Lê do arquivo
+    cred = credentials.Certificate('secrets/firebase_key.json')
 
-FIREBASE_CREDENTIALS_PATH = (
-    BASE_DIR / "secrets" / "firebase_key.json"
-)
-
-DATABASE_URL = ("https://masters-codex-default-rtdb.firebaseio.com/")
-
-if not firebase_admin._apps:
-    cred = credentials.Certificate(
-        FIREBASE_CREDENTIALS_PATH
-    )
-
-    firebase_admin.initialize_app(
-        cred,
-        {
-            "databaseURL": DATABASE_URL
-        }
-    )
+firebase_admin.initialize_app(cred, {
+    'databaseURL': 'https://masters-codex-default-rtdb.firebaseio.com/'
+})
 
 def save_user(user):
     ref = db.reference(
