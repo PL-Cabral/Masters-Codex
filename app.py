@@ -1,8 +1,8 @@
 import os
 from flask import Flask, render_template, request, jsonify
 
-# Importação do Motor de Dados
-from engine.dices import execute_roll_command
+# A CORREÇÃO PRINCIPAL ESTÁ AQUI: "Dices" com D maiúsculo!
+from engine.Dices import execute_roll_command
 
 # Importações originais do seu projeto
 from core.table import Table
@@ -224,7 +224,8 @@ def add_entity():
     if not table: return jsonify({"status": "error"}), 404
         
     if ent_type == 'monster':
-        entity = Monster(name=name, max_hp=hp, level=level, threat_level=threat, monster_type=monster_type, attributes=attributes)
+        # Valores de Armor Class e Damage Type padrão adicionados para não quebrar a regra da classe
+        entity = Monster(name=name, max_hp=hp, level=level, threat_level=threat, natural_damage_type="bludgeoning", armor_class=10, monster_type=monster_type, attributes=attributes)
     else:
         entity = NPC(name=name, max_hp=hp, level=level, attributes=attributes)
         
