@@ -1,5 +1,6 @@
 import os
 from flask import Flask, render_template, request, jsonify
+from engine.Dices import execute_roll_command
 
 # Força a Vercel a encontrar a pasta templates corretamente
 base_dir = os.path.abspath(os.path.dirname(__file__))
@@ -157,6 +158,37 @@ def add_entity():
     persist_table(table)
     
     return jsonify({"status": "success", "message": f"Entidade {name} adicionada com sucesso!"})
+
+@app.route('/api/combat/action', methods=['POST'])
+def perform_combat_action():
+    data = request.json
+    entity_id = data.get('entity_id')
+    action_name = data.get('action_name', 'Ataque Físico')
+    dice_type = int(data.get('dice_type', 20))
+
+    ent = load_entity(entity_id)
+    if not ent:
+        return jsonify({"status": "error", "message": "Monstro/NPC não encontrado para ação."}), 404
+
+    # Rolar os dados usando sua engine original
+    dice_response = execute_roll_command({dice_type: 1})
+    
+    if dice_response.get("status") != "success":
+        return jsonify({"status": "error", "message": dice_response.get("message", "Erro nos dados.")})
+
+    dice_result = dice_response["total_score"]
+
+    # Executar a ação utilizando as regras de POO da sua classe
+    try:
+        if getattr(ent, 'entity_type', '') == 'monster':
+            action_result = ent.perform_action(action_name=action_name, dice_result=dice_result)
+            log_message = f"{ent.name} rolou um D{dice_type} ({dice_result})! Total: {action_result['total']}. Dano: {action_result['damage_type']}."
+        else:
+            log_message = f"{ent.name} rolou um D{dice_type} e tirou {dice_result}."
+            
+        return jsonify({"status": "success", "roll": dice_result, "log": log_message})
+    except Exception as e:
+        return jsonify({"status": "error", "message": f"Erro na ação: {str(e)}"}), 500
 
 if __name__ == '__main__':
     app.run(debug=True)
