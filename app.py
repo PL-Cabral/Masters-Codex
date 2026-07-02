@@ -1,10 +1,13 @@
 import os
 from flask import Flask, render_template, request, jsonify
 
-# Importação do Motor de Dados
-from engine.Dices import execute_roll_command
+# Tratamento de erro de Maiúsculas/Minúsculas no Linux (Vercel) vs Windows
+try:
+    from engine.dices import execute_roll_command
+except ImportError:
+    from engine.Dices import execute_roll_command
 
-# Importações originais
+# Importações originais do seu projeto
 from core.table import Table
 from core.monster import Monster
 from core.npc import NPC
@@ -12,39 +15,36 @@ from core.player import Player
 from core.users.master_user import MasterUser
 from core.users.player_user import PlayerUser
 
-# Configuração base
+# Força a Vercel a encontrar a pasta templates
 base_dir = os.path.abspath(os.path.dirname(__file__))
 template_dir = os.path.join(base_dir, 'templates')
 
 app = Flask(__name__, template_folder=template_dir)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "super-secret-key-rpg")
 
-# Inicialização Firebase
+# Inicialização do Firebase
 firebase_enabled = False
 try:
     from services.firebase_service import save_table, get_table, save_entity, save_user, get_entity, get_user_by_username
     from firebase_admin import db
     firebase_enabled = True
 except Exception as error:
-    print(f"Modo Local ativado. Firebase falhou: {error}")
+    print(f"Aviso: Firebase falhou, operando em modo local. Erro: {error}")
 
-local_tables = {}
-local_entities = {}
-local_users = {}
-local_passwords = {}
+local_tables, local_entities, local_users, local_passwords = {}, {}, {}, {}
 
 # --- FUNÇÕES DE PERSISTÊNCIA ---
-def save_table_password(table_id, username, password):
+def save_table_password(tid, pwd):
     if firebase_enabled:
-        try: db.reference(f"passwords/{table_id}/{username}").set(password)
+        try: db.reference(f"passwords/{tid}_MASTER").set(pwd); return
         except: pass
-    local_passwords[f"{table_id}_{username}"] = password
+    local_passwords[f"{tid}_MASTER"] = pwd
 
-def check_table_password(table_id, username, password):
+def check_table_password(tid, pwd):
     if firebase_enabled:
-        try: return db.reference(f"passwords/{table_id}/{username}").get() == password
+        try: return db.reference(f"passwords/{tid}_MASTER").get() == pwd
         except: pass
-    return local_passwords.get(f"{table_id}_{username}") == password
+    return local_passwords.get(f"{tid}_MASTER") == pwd
 
 def persist_user(user):
     if firebase_enabled:
@@ -58,32 +58,31 @@ def load_user(username):
         except: pass
     return local_users.get(username)
 
-def persist_table(table):
+def persist_table(t):
     if firebase_enabled:
-        try: save_table(table); return
+        try: save_table(t); return
         except: pass
-    local_tables[table.id] = table
+    local_tables[t.id] = t
 
-def load_table(table_id):
+def load_table(tid):
     if firebase_enabled:
-        try: return get_table(table_id)
+        try: return get_table(tid)
         except: pass
-    return local_tables.get(table_id)
+    return local_tables.get(tid)
 
-def persist_entity(entity):
+def persist_entity(e):
     if firebase_enabled:
-        try: save_entity(entity); return
+        try: save_entity(e); return
         except: pass
-    local_entities[entity.id] = entity
+    local_entities[e.id] = e
 
-def load_entity(entity_id):
+def load_entity(eid):
     if firebase_enabled:
-        try: return get_entity(entity_id)
+        try: return get_entity(eid)
         except: pass
-    return local_entities.get(entity_id)
+    return local_entities.get(eid)
 
-
-# --- ROTAS ---
+# --- ROTAS DA APLICAÇÃO ---
 @app.route('/')
 def index():
     return render_template('index.html', firebase=firebase_enabled)
@@ -91,110 +90,162 @@ def index():
 @app.route('/api/login/master', methods=['POST'])
 def master_login():
     data = request.json
+    tid = data.get('table_id')
+    pwd = data.get('password')
     username = data.get('username')
-    table_id = data.get('table_id')
-    password = data.get('password')
+
+    if not username: return jsonify({"status": "error", "message": "Nome obrigatório."}), 400
+
+    # Carregar Mesa Existente (GM)
+    if tid:
+        table = load_table(tid)
+        if not table: return jsonify({"status": "error", "message": "Mesa não encontrada."}), 404
+        if not check_table_password(tid, pwd):
+            return jsonify({"status": "error", "message": "Senha do Mestre incorreta!"}), 401
+        
+        user = load_user(username) or MasterUser(username=username)
+        persist_user(user)
+        return jsonify({"status": "success", "role": "master", "username": user.username, "table_id": tid})
+    
+    # Prepara para Criar Nova Mesa (GM)
     user = load_user(username) or MasterUser(username=username)
     persist_user(user)
-    
-    if table_id:
-        if not check_table_password(table_id, 'MASTER_PWD', password):
-            return jsonify({"status": "error", "message": "Senha do Mestre incorreta!"}), 401
-        return jsonify({"status": "success", "role": "master", "user_id": user.id, "username": user.username, "table_id": table_id})
-    return jsonify({"status": "success", "role": "master", "user_id": user.id, "username": user.username})
+    return jsonify({"status": "success", "role": "master", "username": user.username})
 
 @app.route('/api/login/player', methods=['POST'])
 def player_login():
     data = request.json
     username = data.get('username')
-    table_id = data.get('table_id')
-    table = load_table(table_id)
-    if not table: return jsonify({"status": "error", "message": "Mesa não encontrada."}), 404
+    tid = data.get('table_id')
+
+    if not username or not tid: return jsonify({"status": "error", "message": "Nome e ID da Mesa são obrigatórios."}), 400
+
+    table = load_table(tid)
+    if not table: return jsonify({"status": "error", "message": "Mesa inválida ou não encontrada."}), 404
     
+    # Verifica se o jogador já existe na mesa (Não usa senha)
     char_id = None
-    for ent_id in table.entity_ids:
-        ent = load_entity(ent_id)
+    for eid in table.entity_ids:
+        ent = load_entity(eid)
         if ent and hasattr(ent, 'character_class') and ent.name == username:
             char_id = ent.id
             break
             
     if char_id:
-        return jsonify({"status": "success", "role": "player", "username": username, "char_id": char_id, "table_id": table_id})
-    return jsonify({"status": "needs_creation", "username": username, "table_id": table_id})
+        return jsonify({"status": "success", "role": "player", "username": username, "char_id": char_id, "table_id": tid})
+    
+    # Jogador não existe, precisa criar personagem
+    return jsonify({"status": "needs_creation", "username": username, "table_id": tid})
+
+@app.route('/api/table/create', methods=['POST'])
+def create_table():
+    data = request.json
+    t_name = data.get('table_name')
+    pwd = data.get('password')
+    
+    if not t_name or not pwd: return jsonify({"status": "error", "message": "Nome e Senha são obrigatórios."}), 400
+
+    t = Table(name=t_name, master_user_id="MASTER")
+    persist_table(t)
+    save_table_password(t.id, pwd)
+    
+    return jsonify({"status": "success", "table_id": t.id})
 
 @app.route('/api/player/create_character', methods=['POST'])
 def create_character():
     data = request.json
     username = data.get('username')
-    table_id = data.get('table_id')
+    tid = data.get('table_id')
     char_class = data.get('char_class')
-    attr = data.get('attributes')
     
-    # CÁLCULO HP: Base 20 + Bônus de Constituição (Atributo CON / 2)
-    hp = 20 + int(int(attr.get('con', 10)) / 2)
+    p = Player(name=username, max_hp=20, level=1, character_class=char_class)
+    persist_entity(p)
     
-    player_ent = Player(name=username, max_hp=hp, level=1, character_class=char_class, race="Humano", attributes=attr)
-    persist_entity(player_ent)
+    table = load_table(tid)
+    if not table: return jsonify({"status": "error", "message": "Mesa perdida"}), 404
     
-    table = load_table(table_id)
-    table.add_entity(player_ent)
-    table.add_log(f"⚔️ {username} ({char_class}) entrou na mesa!")
+    table.add_entity(p)
+    table.add_log(f"⚔️ O jogador(a) [{username}] ingressou como {char_class}!")
     persist_table(table)
+    
+    return jsonify({"status": "success", "char_id": p.id, "table_id": tid})
 
-    return jsonify({"status": "success", "char_id": player_ent.id})
-
-@app.route('/api/table/create', methods=['POST'])
-def create_table():
-    data = request.json
-    new_table = Table(name=data.get('table_name'), master_user_id=data.get('master_id'))
-    persist_table(new_table)
-    if data.get('password'): save_table_password(new_table.id, 'MASTER_PWD', data.get('password'))
-    return jsonify({"status": "success", "table_id": new_table.id})
-
-@app.route('/api/table/<table_id>', methods=['GET'])
-def get_table_info(table_id):
-    table = load_table(table_id)
-    if not table: return jsonify({"status": "error"}), 404
+@app.route('/api/table/<tid>', methods=['GET'])
+def get_info(tid):
+    t = load_table(tid)
+    if not t: return jsonify({"status": "error"}), 404
     
     p_list, m_list = [], []
-    for ent_id in table.entity_ids:
-        ent = load_entity(ent_id)
+    for eid in t.entity_ids:
+        ent = load_entity(eid)
         if ent:
-            is_player = hasattr(ent, 'character_class')
-            ent_data = {"id": ent.id, "name": ent.name, "hp": ent.current_hp, "max_hp": ent.max_hp, "class": getattr(ent, 'character_class', getattr(ent, 'monster_type', 'NPC'))}
-            if is_player: p_list.append(ent_data)
+            is_p = hasattr(ent, 'character_class')
+            ent_data = {
+                "id": ent.id, 
+                "name": ent.name, 
+                "hp": ent.current_hp, 
+                "max_hp": ent.max_hp, 
+                "class": getattr(ent, 'character_class', getattr(ent, 'monster_type', 'NPC'))
+            }
+            if is_p: p_list.append(ent_data)
             else: m_list.append(ent_data)
             
-    return jsonify({"status": "success", "name": table.name, "players": p_list, "monsters": m_list, "logs": getattr(table, 'logs', [])[-15:]})
+    return jsonify({
+        "status": "success",
+        "name": t.name, 
+        "id": t.id, 
+        "players": p_list, 
+        "monsters": m_list, 
+        "logs": getattr(t, 'logs', [])[-15:]
+    })
 
 @app.route('/api/table/add_entity', methods=['POST'])
 def add_entity():
     data = request.json
     table = load_table(data.get('table_id'))
-    ent = Monster(name=data.get('name'), max_hp=int(data.get('hp')), level=int(data.get('level')), monster_type=data.get('monster_type'), attributes=data.get('attributes'))
+    if not table: return jsonify({"status": "error"}), 404
+    
+    ent = Monster(
+        name=data.get('name'), 
+        max_hp=int(data.get('hp', 10)), 
+        level=1, 
+        monster_type="Monstro", 
+        natural_damage_type="bludgeoning", 
+        armor_class=10
+    )
     persist_entity(ent)
     table.add_entity(ent)
+    table.add_log(f"🔮 O Mestre invocou: {ent.name} (HP: {ent.max_hp})!")
     persist_table(table)
     return jsonify({"status": "success"})
 
 @app.route('/api/combat/action', methods=['POST'])
-def perform_combat_action():
+def combat():
     data = request.json
-    attacker = load_entity(data.get('attacker_id'))
-    target = load_entity(data.get('target_id')) if data.get('target_id') else None
+    att = load_entity(data.get('attacker_id'))
+    tar = load_entity(data.get('target_id')) if data.get('target_id') else None
     
-    roll = execute_roll_command({int(data.get('dice_type')): 1})["total_score"]
-    msg = f"🎲 [{attacker.name}] rolou {data.get('action_name')}: {roll}."
+    if not att: return jsonify({"status": "error", "message": "Atacante não encontrado"}), 404
+
+    roll = execute_roll_command({int(data.get('dice_type', 20)): 1}).get("total_score", 1)
+    action_name = data.get('action_name', 'Ação')
     
-    if target:
-        if data.get('action_name') == 'Cura': target.heal(roll)
-        else: target.take_damage(roll)
-        persist_entity(target)
-        msg += f" (Efeito: {roll})"
+    msg = f"🎲 [{att.name}] usou {action_name} e rolou {roll}."
+    
+    if tar:
+        if action_name == 'Cura': 
+            tar.heal(roll)
+            msg += f" Curou [{tar.name}] em {roll} HP! 💚"
+        else: 
+            tar.take_damage(roll)
+            msg += f" Causou {roll} de dano em [{tar.name}]! 💥"
+            if tar.current_hp <= 0:
+                msg += f" [{tar.name}] foi derrotado!"
+        persist_entity(tar)
         
-    table = load_table(data.get('table_id'))
-    table.add_log(msg)
-    persist_table(table)
+    t = load_table(data.get('table_id'))
+    t.add_log(msg)
+    persist_table(t)
     return jsonify({"status": "success"})
 
 if __name__ == '__main__':
