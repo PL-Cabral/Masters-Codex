@@ -62,6 +62,15 @@
             </div>
         </div>
 
+        <div class="box" id="player-actions" style="display:none;">
+            <h3>Ações do Jogador</h3>
+            <div class="form-group" style="background: #333; padding: 15px; border-radius: 5px;">
+                <label>Entrar em uma Sessão</label>
+                <input type="text" id="player-table-id" placeholder="Cole o Código da Mesa aqui">
+                <button onclick="playerJoinTable()" style="background-color: #3742fa;">Entrar na Mesa</button>
+            </div>
+        </div>
+
         <div class="box" id="table-view" style="display:none;">
             <h3>Dados da Mesa Atual: <span id="current-table-name" style="color: #2ed573;"></span></h3>
             <p><strong>ID da Mesa:</strong> <span id="current-table-id"></span></p>
@@ -88,7 +97,7 @@
     let currentUser = null;
     let currentTableId = null;
 
-    async function login() {
+ async function login() {
         const username = document.getElementById('username').value;
         const role = document.getElementById('role').value;
 
@@ -109,9 +118,18 @@
                 document.getElementById('master-actions').style.display = 'block';
                 document.getElementById('add-entity-form').style.display = 'block';
             } else {
-                document.getElementById('table-view').style.display = 'block';
+                // Se for jogador, mostra o campo para ele digitar o ID da mesa
+                document.getElementById('player-actions').style.display = 'block';
             }
         }
+    }
+
+    function playerJoinTable() {
+        const tableId = document.getElementById('player-table-id').value;
+        if(!tableId) return alert("Por favor, insira o Código da Mesa.");
+        currentTableId = tableId;
+        fetchTableDetails(); // Carrega a mesa
+        document.getElementById('player-actions').style.display = 'none'; // Esconde o campo de busca
     }
 
     async function createTable() {
