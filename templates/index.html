@@ -2,252 +2,419 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Master's Codex - Web Panel</title>
+    <title>Master's Codex - VTT Web</title>
     <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #1a1a1a; color: #e0e0e0; margin: 0; padding: 20px; }
-        .container { max-width: 900px; margin: 0 auto; background: #2d2d2d; padding: 30px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
-        h1, h2 { color: #ff4757; border-bottom: 2px solid #3a3a3a; padding-bottom: 10px; }
+        .container { max-width: 1000px; margin: 0 auto; background: #2d2d2d; padding: 30px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
+        h1, h2, h3, h4 { color: #ff4757; margin-top: 0; }
+        h2 { border-bottom: 2px solid #3a3a3a; padding-bottom: 10px; }
         .form-group { margin-bottom: 15px; }
         label { display: block; margin-bottom: 5px; font-weight: bold; }
         input, select, button { width: 100%; padding: 10px; border-radius: 4px; border: 1px solid #444; background: #3a3a3a; color: #fff; box-sizing: border-box; }
-        button { background-color: #ff4757; font-weight: bold; cursor: pointer; border: none; margin-top: 10px; }
+        button { background-color: #ff4757; font-weight: bold; cursor: pointer; border: none; margin-top: 5px; }
         button:hover { background-color: #e84118; }
-        .dashboard { display: none; margin-top: 20px; }
-        .status-badge { display: inline-block; padding: 5px 10px; background: #2ed573; color: #fff; border-radius: 4px; font-size: 12px; margin-bottom: 15px; }
         .box { background: #222; padding: 15px; border-radius: 6px; margin-bottom: 15px; }
+        .flex-row { display: flex; gap: 10px; align-items: center; }
+        .flex-row > * { flex: 1; }
+        .badge { background: #2ed573; color: #000; padding: 2px 6px; border-radius: 3px; font-size: 12px; font-weight: bold;}
+        .hp-bar { background: #4cd137; height: 10px; border-radius: 5px; }
+        
+        /* Stats Editor */
+        .stat-row { display: flex; justify-content: space-between; background: #333; padding: 8px; margin-bottom: 5px; border-radius: 4px; }
+        .stat-btn { background: #555; padding: 5px 10px; width: auto; }
+        
+        #combat-log-box { background: #000; color: #00ff00; font-family: monospace; padding: 10px; height: 150px; overflow-y: auto; border-radius: 5px;}
     </style>
 </head>
 <body>
 
 <div class="container">
     <h1>MASTER'S CODEX</h1>
-    <div class="status-badge">Modo Operacional: Vercel Web Cloud</div>
-
+    
     <div id="login-screen">
-        <h2>Acesso ao Sistema</h2>
+        <h2>Acesso à Sessão</h2>
         <div class="form-group">
-            <label>Nome do Usuário:</label>
-            <input type="text" id="username" placeholder="Digite seu nome...">
-        </div>
-        <div class="form-group">
-            <label>Cargo:</label>
-            <select id="role">
-                <option value="master">Mestre (DM)</option>
-                <option value="player">Jogador</option>
+            <label>Qual sua função?</label>
+            <select id="role-select" onchange="toggleLoginFields()">
+                <option value="master">Sou o Mestre (GM)</option>
+                <option value="player">Sou Jogador</option>
             </select>
         </div>
-        <button onclick="login()">Entrar no Codex</button>
+        <div class="form-group">
+            <label>Nome do Usuário/Personagem:</label>
+            <input type="text" id="username" placeholder="Digite seu nome...">
+        </div>
+        <div id="player-login-fields" style="display:none; background: #333; padding: 15px; border-radius: 5px;">
+            <div class="form-group">
+                <label>ID da Mesa (Código):</label>
+                <input type="text" id="login-table-id" placeholder="Ex: 1234-abcd">
+            </div>
+            <div class="form-group">
+                <label>Senha da Mesa:</label>
+                <input type="password" id="login-password" placeholder="Senha do seu char nesta mesa">
+                <small style="color: #aaa;">Se for sua 1ª vez nesta mesa, esta será sua senha definitiva.</small>
+            </div>
+        </div>
+        <button onclick="performLogin()">Entrar</button>
     </div>
 
-    <div id="dashboard" class="dashboard">
-        <h2>Painel de Controle (<span id="user-display"></span>)</h2>
+    <div id="char-creation-screen" style="display:none;">
+        <h2>Criação de Personagem - 1ª Vez</h2>
+        <p>Bem-vindo à mesa! Escolha sua classe e distribua <strong id="points-left" style="color:#ff4757;">7</strong> pontos.</p>
         
-        <div class="box" id="master-actions" style="display:none;">
-            <h3>Ações do Mestre</h3>
-            
-            <!-- AÇÃO 1: CRIAR MESA -->
-            <div class="form-group" style="background: #333; padding: 15px; border-radius: 5px;">
-                <label>Criar Nova Sessão</label>
-                <input type="text" id="table-name" placeholder="Nome da Nova Mesa">
-                <button onclick="createTable()" style="background-color: #ff4757;">Criar Mesa</button>
-            </div>
-            
-            <hr style="border-color: #444;">
-            
-            <!-- AÇÃO 2: CARREGAR MESA -->
-            <div class="form-group" style="background: #333; padding: 15px; border-radius: 5px;">
-                <label>Carregar Sessão Existente</label>
-                <input type="text" id="search-table-id" placeholder="Cole o Código da Mesa aqui">
-                <button onclick="fetchTableDetails()" style="background-color: #2ed573; color: #000;">Carregar Mesa</button>
-            </div>
+        <div class="form-group">
+            <select id="char-class" onchange="loadBaseStats()">
+                <option value="Guerreiro">Guerreiro (Corpo-a-corpo)</option>
+                <option value="Mago">Mago (Feitiços)</option>
+                <option value="Assassino">Assassino (Furtividade)</option>
+            </select>
+        </div>
+        
+        <div class="box">
+            <div class="stat-row"><span>HP Máximo</span> <span id="char-hp">20</span></div>
+            <div class="stat-row"><span>Força (STR)</span> <div class="flex-row"><button class="stat-btn" onclick="changeStat('str', -1)">-</button><span id="stat-str">15</span><button class="stat-btn" onclick="changeStat('str', 1)">+</button></div></div>
+            <div class="stat-row"><span>Destreza (DEX)</span> <div class="flex-row"><button class="stat-btn" onclick="changeStat('dex', -1)">-</button><span id="stat-dex">12</span><button class="stat-btn" onclick="changeStat('dex', 1)">+</button></div></div>
+            <div class="stat-row"><span>Constituição (CON)</span> <div class="flex-row"><button class="stat-btn" onclick="changeStat('con', -1)">-</button><span id="stat-con">14</span><button class="stat-btn" onclick="changeStat('con', 1)">+</button></div></div>
+            <div class="stat-row"><span>Inteligência (INT)</span> <div class="flex-row"><button class="stat-btn" onclick="changeStat('int', -1)">-</button><span id="stat-int">8</span><button class="stat-btn" onclick="changeStat('int', 1)">+</button></div></div>
+            <div class="stat-row"><span>Sabedoria (WIS)</span> <div class="flex-row"><button class="stat-btn" onclick="changeStat('wis', -1)">-</button><span id="stat-wis">10</span><button class="stat-btn" onclick="changeStat('wis', 1)">+</button></div></div>
+            <div class="stat-row"><span>Carisma (CHA)</span> <div class="flex-row"><button class="stat-btn" onclick="changeStat('cha', -1)">-</button><span id="stat-cha">10</span><button class="stat-btn" onclick="changeStat('cha', 1)">+</button></div></div>
+        </div>
+        <button onclick="finalizeCharCreation()">Salvar e Entrar na Mesa</button>
+    </div>
+
+    <div id="vtt-screen" style="display:none;">
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #444; padding-bottom: 10px; margin-bottom: 20px;">
+            <h2 style="margin: 0;">Mesa: <span id="table-name-display" style="color:#2ed573;"></span></h2>
+            <div class="badge">Código: <span id="table-id-display"></span></div>
         </div>
 
-        <div class="box" id="player-actions" style="display:none;">
-            <h3>Ações do Jogador</h3>
-            <div class="form-group" style="background: #333; padding: 15px; border-radius: 5px;">
-                <label>Entrar em uma Sessão</label>
-                <input type="text" id="player-table-id" placeholder="Cole o Código da Mesa aqui">
-                <button onclick="playerJoinTable()" style="background-color: #3742fa;">Entrar na Mesa</button>
-            </div>
-        </div>
+        <div style="display: flex; gap: 20px;">
+            <div style="flex: 1;">
+                <div id="gm-tools" class="box" style="display:none; background: #30171a;">
+                    <h3 style="color: #ff9f43;">Ferramentas do Mestre</h3>
+                    <div id="gm-create-table">
+                        <input type="text" id="new-table-name" placeholder="Nome da Nova Mesa" style="margin-bottom: 5px;">
+                        <button onclick="createTable()">Criar Nova Mesa do Zero</button>
+                    </div>
+                    <hr style="border-color: #555; margin: 15px 0;">
+                    <div>
+                        <h4>Invocar Monstro/NPC</h4>
+                        <div class="flex-row">
+                            <select id="mob-type" onchange="loadMobBaseStats()">
+                                <option value="Goblin">Goblin</option>
+                                <option value="Orc">Orc</option>
+                                <option value="Slime">Slime</option>
+                                <option value="Aranha">Aranha Gigante</option>
+                            </select>
+                            <input type="number" id="mob-level" placeholder="Nível" value="1" min="1" onchange="loadMobBaseStats()">
+                        </div>
+                        <input type="text" id="mob-name" placeholder="Nome Específico (Ex: Chefe Orc)" style="margin-top: 5px;">
+                        <div class="flex-row" style="margin-top: 5px;">
+                            <input type="number" id="mob-hp" placeholder="HP">
+                            <input type="number" id="mob-str" placeholder="STR">
+                            <input type="number" id="mob-dex" placeholder="DEX">
+                        </div>
+                        <button onclick="addMob()">Adicionar à Mesa</button>
+                    </div>
+                </div>
 
-        <div class="box" id="table-view" style="display:none;">
-            <h3>Dados da Mesa Atual: <span id="current-table-name" style="color: #2ed573;"></span></h3>
-            <p><strong>ID da Mesa:</strong> <span id="current-table-id"></span></p>
-            <p><strong>Estado do Jogo:</strong> <span id="current-table-state"></span></p>
-            
-            <h4>Entidades em Jogo (Monstros / NPCs):</h4>
-            <div id="master-combat-panel" style="display:none; margin-top: 20px; background: #2f3640; padding: 15px; border-radius: 5px; border-left: 4px solid #e84118;">
-                <h4>Painel de Combate (Rolagem Rápida)</h4>
-                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                    <select id="combat-entity-select" style="flex: 1;">
-                        <option value="">Selecione um Monstro...</option>
+                <div class="box" style="background: #192a56;">
+                    <h3>Central de Ações</h3>
+                    <div class="form-group">
+                        <label>Atacante / Quem age:</label>
+                        <select id="action-actor">
+                            <option value="">Selecione...</option>
                         </select>
-                    <select id="combat-dice" style="width: 100px;">
-                        <option value="20">D20</option>
-                        <option value="10">D10</option>
-                        <option value="6">D6</option>
-                    </select>
-                    <button onclick="rollMonsterAction()" style="width: 150px;">Ataque Base</button>
-                </div>
-                <div id="combat-log" style="margin-top: 15px; padding: 10px; background: #111; color: #4cd137; font-family: monospace; border-radius: 3px; min-height: 40px;">
-                    Aguardando rolagens...
+                    </div>
+                    <div class="form-group">
+                        <label>Ação a realizar:</label>
+                        <div class="flex-row">
+                            <select id="action-type">
+                                <option value="Ataque Físico">Ataque Físico</option>
+                                <option value="Ataque Mágico">Ataque Mágico</option>
+                                <option value="Cura">Cura (Magia/Poção)</option>
+                                <option value="Teste de Força">Teste de Força</option>
+                                <option value="Teste de Inteligência">Teste de Inteligência</option>
+                                <option value="Teste de Carisma">Teste de Carisma</option>
+                                <option value="Salva-vidas">Salva-vidas (Saving Throw)</option>
+                            </select>
+                            <select id="action-dice" style="max-width: 80px;">
+                                <option value="20">D20</option>
+                                <option value="12">D12</option>
+                                <option value="10">D10</option>
+                                <option value="6">D6</option>
+                                <option value="4">D4</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Alvo (Para Ataque ou Cura):</label>
+                        <select id="action-target">
+                            <option value="">Nenhum / Área</option>
+                        </select>
+                    </div>
+                    <button onclick="performAction()" style="background-color: #2ed573; color: #000; font-size: 16px;">Rolar Dados e Executar!</button>
                 </div>
             </div>
-            <ul id="entities-list"></ul>
 
-            <div id="add-entity-form" style="display:none;">
-                <h4>Adicionar Monstro/NPC à Mesa</h4>
-                <input type="text" id="ent-name" placeholder="Nome da Entidade" style="margin-bottom: 5px;">
-                <input type="number" id="ent-hp" placeholder="HP Máximo" style="margin-bottom: 5px;">
-                <select id="ent-type" style="margin-bottom: 5px;">
-                    <option value="monster">Monstro</option>
-                    <option value="npc">NPC</option>
-                </select>
-                <button onclick="addEntity()">Inserir Entidade</button>
+            <div style="flex: 1;">
+                <div class="box">
+                    <h3>Quadro de Entidades</h3>
+                    <h4 style="color:#2ed573; margin-bottom: 5px;">Jogadores</h4>
+                    <ul id="players-list" style="list-style: none; padding: 0; margin: 0 0 15px 0;"></ul>
+                    
+                    <h4 style="color:#ff4757; margin-bottom: 5px;">Monstros & NPCs</h4>
+                    <ul id="monsters-list" style="list-style: none; padding: 0; margin: 0;"></ul>
+                </div>
+
+                <div class="box">
+                    <h3>Terminal de Eventos</h3>
+                    <div id="combat-log-box"></div>
+                </div>
             </div>
         </div>
     </div>
 </div>
 
 <script>
+    // ESTADOS GLOBAIS E REGRAS
     let currentUser = null;
     let currentTableId = null;
+    let pollingInterval = null;
 
- async function login() {
+    const classStats = {
+        "Guerreiro": { hp: 20, str: 15, dex: 12, con: 14, int: 8, wis: 10, cha: 10 },
+        "Mago": { hp: 12, str: 8, dex: 12, con: 10, int: 15, wis: 14, cha: 10 },
+        "Assassino": { hp: 15, str: 10, dex: 15, con: 12, int: 10, wis: 10, cha: 14 }
+    };
+
+    const mobBase = {
+        "Goblin": { hp: 10, str: 8, dex: 14, threat: 1 },
+        "Orc": { hp: 20, str: 16, dex: 10, threat: 2 },
+        "Slime": { hp: 15, str: 10, dex: 8, threat: 1 },
+        "Aranha": { hp: 12, str: 12, dex: 16, threat: 1 }
+    };
+
+    let charCreationData = { points: 7, base: {} };
+
+    // FUNÇÕES DE UI / LOGIN
+    function toggleLoginFields() {
+        const role = document.getElementById('role-select').value;
+        document.getElementById('player-login-fields').style.display = role === 'player' ? 'block' : 'none';
+    }
+
+    async function performLogin() {
+        const role = document.getElementById('role-select').value;
         const username = document.getElementById('username').value;
-        const role = document.getElementById('role').value;
+        
+        if(!username) return alert("Digite seu nome!");
 
-        const res = await fetch('/api/login', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ username, role })
-        });
+        if(role === 'master') {
+            const res = await fetch('/api/login/master', { method: 'POST', headers:{'Content-Type': 'application/json'}, body: JSON.stringify({username})});
+            const data = await res.json();
+            if(data.status === 'success') {
+                currentUser = data;
+                document.getElementById('login-screen').style.display = 'none';
+                document.getElementById('vtt-screen').style.display = 'block';
+                document.getElementById('gm-tools').style.display = 'block';
+                loadMobBaseStats();
+            }
+        } else {
+            const tableId = document.getElementById('login-table-id').value;
+            const password = document.getElementById('login-password').value;
+            if(!tableId || !password) return alert("ID e Senha da mesa são obrigatórios para jogadores.");
+
+            charCreationData.temp = {username, tableId, password}; // Guarda pro caso de precisar criar char
+
+            const res = await fetch('/api/login/player', { method: 'POST', headers:{'Content-Type': 'application/json'}, body: JSON.stringify({username, table_id: tableId, password})});
+            const data = await res.json();
+            
+            if(data.status === 'success') {
+                currentUser = data;
+                currentTableId = tableId;
+                startVTT();
+            } else if (data.status === 'needs_creation') {
+                document.getElementById('login-screen').style.display = 'none';
+                document.getElementById('char-creation-screen').style.display = 'block';
+                loadBaseStats();
+            } else {
+                alert(data.message);
+            }
+        }
+    }
+
+    // CRIAÇÃO DE PERSONAGEM
+    function loadBaseStats() {
+        const c = document.getElementById('char-class').value;
+        charCreationData.base = {...classStats[c]};
+        charCreationData.points = 7;
+        updateCharUI();
+    }
+
+    function changeStat(stat, val) {
+        if(val > 0 && charCreationData.points > 0) {
+            charCreationData.base[stat]++;
+            charCreationData.points--;
+        } else if (val < 0 && charCreationData.base[stat] > classStats[document.getElementById('char-class').value][stat]) {
+            charCreationData.base[stat]--;
+            charCreationData.points++;
+        }
+        updateCharUI();
+    }
+
+    function updateCharUI() {
+        document.getElementById('points-left').innerText = charCreationData.points;
+        document.getElementById('char-hp').innerText = charCreationData.base.hp;
+        ['str','dex','con','int','wis','cha'].forEach(s => { document.getElementById(`stat-${s}`).innerText = charCreationData.base[s]; });
+    }
+
+    async function finalizeCharCreation() {
+        const payload = {
+            username: charCreationData.temp.username,
+            table_id: charCreationData.temp.tableId,
+            password: charCreationData.temp.password,
+            char_class: document.getElementById('char-class').value,
+            hp: charCreationData.base.hp,
+            attributes: charCreationData.base
+        };
+
+        const res = await fetch('/api/player/create_character', { method: 'POST', headers:{'Content-Type': 'application/json'}, body: JSON.stringify(payload)});
         const data = await res.json();
-
         if(data.status === 'success') {
             currentUser = data;
-            document.getElementById('login-screen').style.display = 'none';
-            document.getElementById('dashboard').style.display = 'block';
-            document.getElementById('user-display').innerText = `${data.username} - ${data.role.toUpperCase()}`;
-            
-            if(data.role === 'master') {
-                document.getElementById('master-actions').style.display = 'block';
-                document.getElementById('add-entity-form').style.display = 'block';
-            } else {
-                // Se for jogador, mostra o campo para ele digitar o ID da mesa
-                document.getElementById('player-actions').style.display = 'block';
-            }
+            currentTableId = data.table_id;
+            document.getElementById('char-creation-screen').style.display = 'none';
+            startVTT();
         }
     }
 
-    function playerJoinTable() {
-        const tableId = document.getElementById('player-table-id').value;
-        if(!tableId) return alert("Por favor, insira o Código da Mesa.");
-        currentTableId = tableId;
-        fetchTableDetails(); // Carrega a mesa
-        document.getElementById('player-actions').style.display = 'none'; // Esconde o campo de busca
-    }
-
+    // MESTRE: CRIAÇÃO DE MESA E MONSTROS
     async function createTable() {
-        const tableName = document.getElementById('table-name').value;
-        if(!tableName) return alert("Digite um nome para a mesa.");
-        
-        const res = await fetch('/api/table/create', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ table_name: tableName, master_id: currentUser.user_id })
-        });
+        const name = document.getElementById('new-table-name').value;
+        if(!name) return;
+        const res = await fetch('/api/table/create', { method: 'POST', headers:{'Content-Type': 'application/json'}, body: JSON.stringify({table_name: name, master_id: currentUser.user_id})});
         const data = await res.json();
         if(data.status === 'success') {
-            alert(`Mesa Criada com Sucesso!\n\nGuarde este Código: ${data.table_id}\n\nUse o campo "Carregar Sessão" abaixo para entrar nela.`);
-            document.getElementById('table-name').value = ''; // Limpa o campo
+            alert(`Mesa Criada! Código (passe aos jogadores): ${data.table_id}`);
+            currentTableId = data.table_id;
+            startVTT();
         }
     }
 
-   async function fetchTableDetails() {
-        const tableId = document.getElementById('search-table-id').value || currentTableId;
-        if(!tableId) return alert("Por favor, insira o Código da Mesa.");
+    function loadMobBaseStats() {
+        const type = document.getElementById('mob-type').value;
+        const level = parseInt(document.getElementById('mob-level').value) || 1;
+        const base = mobBase[type];
+        
+        document.getElementById('mob-name').value = `Lobo ${type}`;
+        // Buff básico pelo level
+        document.getElementById('mob-hp').value = base.hp + (level * 5);
+        document.getElementById('mob-str').value = base.str + Math.floor(level/2);
+        document.getElementById('mob-dex').value = base.dex + Math.floor(level/2);
+    }
 
-        const res = await fetch(`/api/table/${tableId}`);
-        const data = await res.json();
-
-        if(data.status === 'success') {
-            currentTableId = data.id;
-            document.getElementById('table-view').style.display = 'block';
-            document.getElementById('current-table-name').innerText = data.name;
-            document.getElementById('current-table-id').innerText = data.id;
-            
-            // Mostrar Painel de combate apenas para o Mestre
-            if (currentUser && currentUser.role === 'master') {
-                document.getElementById('master-combat-panel').style.display = 'block';
+    async function addMob() {
+        if(!currentTableId) return alert("Crie ou entre em uma mesa primeiro!");
+        const payload = {
+            table_id: currentTableId,
+            type: 'monster',
+            monster_type: document.getElementById('mob-type').value,
+            name: document.getElementById('mob-name').value,
+            level: document.getElementById('mob-level').value,
+            hp: document.getElementById('mob-hp').value,
+            threat: mobBase[document.getElementById('mob-type').value].threat,
+            attributes: {
+                strength: document.getElementById('mob-str').value,
+                dexterity: document.getElementById('mob-dex').value
             }
+        };
 
-            const list = document.getElementById('entities-list');
-            const select = document.getElementById('combat-entity-select');
-            
-            list.innerHTML = '';
-            select.innerHTML = '<option value="">Selecione um Monstro/NPC...</option>';
-            
-            data.entities.forEach(ent => {
-                // Lista de visualização
+        await fetch('/api/table/add_entity', { method: 'POST', headers:{'Content-Type': 'application/json'}, body: JSON.stringify(payload)});
+        fetchTableDetails(); // Força update
+    }
+
+    // VTT CORE & POLLING EM TEMPO REAL
+    function startVTT() {
+        document.getElementById('login-screen').style.display = 'none';
+        document.getElementById('vtt-screen').style.display = 'block';
+        fetchTableDetails();
+        if(pollingInterval) clearInterval(pollingInterval);
+        pollingInterval = setInterval(fetchTableDetails, 3000); // Polling a cada 3s
+    }
+
+    async function fetchTableDetails() {
+        if(!currentTableId) return;
+        const res = await fetch(`/api/table/${currentTableId}`);
+        const data = await res.json();
+
+        if(data.status === 'success') {
+            document.getElementById('table-name-display').innerText = data.name;
+            document.getElementById('table-id-display').innerText = data.id;
+
+            // Salva seleções atuais para não bugar durante o refresh
+            const actorSelect = document.getElementById('action-actor');
+            const targetSelect = document.getElementById('action-target');
+            const currentActor = actorSelect.value;
+            const currentTarget = targetSelect.value;
+
+            actorSelect.innerHTML = '<option value="">Selecione...</option>';
+            targetSelect.innerHTML = '<option value="">Nenhum / Área</option>';
+
+            const pList = document.getElementById('players-list');
+            const mList = document.getElementById('monsters-list');
+            pList.innerHTML = ''; mList.innerHTML = '';
+
+            const renderEntity = (ent, listEl) => {
                 const li = document.createElement('li');
-                li.innerText = `${ent.name} (${ent.type}) - HP: ${ent.hp}`;
-                list.appendChild(li);
+                li.style.marginBottom = '8px';
+                li.style.background = '#333';
+                li.style.padding = '8px';
+                li.style.borderRadius = '4px';
                 
-                // Dropdown de combate para o Mestre
-                const opt = document.createElement('option');
-                opt.value = ent.id; // Supondo que a API devolva o ID da entidade (ajuste na API se necessário)
-                opt.innerText = ent.name;
-                select.appendChild(opt);
-            });
+                const percent = Math.max(0, Math.min(100, (ent.hp / ent.max_hp) * 100));
+                
+                li.innerHTML = `
+                    <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
+                        <strong>${ent.name} <span style="color:#aaa; font-size:11px;">(${ent.class})</span></strong>
+                        <span>HP: ${ent.hp}/${ent.max_hp}</span>
+                    </div>
+                    <div style="background:#111; width:100%; height:8px; border-radius:4px;"><div class="hp-bar" style="width:${percent}%; background:${percent < 30 ? '#ff4757' : '#2ed573'}"></div></div>
+                `;
+                listEl.appendChild(li);
+
+                // Regra de Dropdown: Jogador só ataca com o próprio char. GM usa qualquer um.
+                if(currentUser.role === 'master' || (currentUser.role === 'player' && ent.id === currentUser.char_id)) {
+                    actorSelect.innerHTML += `<option value="${ent.id}">${ent.name}</option>`;
+                }
+                targetSelect.innerHTML += `<option value="${ent.id}">${ent.name}</option>`;
+            };
+
+            data.players.forEach(p => renderEntity(p, pList));
+            data.monsters.forEach(m => renderEntity(m, mList));
+
+            if(currentActor) actorSelect.value = currentActor;
+            if(currentTarget) targetSelect.value = currentTarget;
+
+            // Render logs
+            const logBox = document.getElementById('combat-log-box');
+            logBox.innerHTML = data.logs.join('<br><br>');
+            logBox.scrollTop = logBox.scrollHeight;
         }
     }
 
-    async function rollMonsterAction() {
-        const entityId = document.getElementById('combat-entity-select').value;
-        const diceType = document.getElementById('combat-dice').value;
-        
-        if(!entityId) return alert("Selecione um monstro para atacar!");
+    async function performAction() {
+        const payload = {
+            table_id: currentTableId,
+            attacker_id: document.getElementById('action-actor').value,
+            target_id: document.getElementById('action-target').value,
+            action_name: document.getElementById('action-type').value,
+            dice_type: document.getElementById('action-dice').value
+        };
 
-        const res = await fetch('/api/combat/action', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ entity_id: entityId, dice_type: diceType })
-        });
-        
-        const data = await res.json();
-        const logBox = document.getElementById('combat-log');
-        
-        if(data.status === 'success') {
-            logBox.innerText = `> ${data.log}`;
-        } else {
-            logBox.innerText = `> Erro: ${data.message}`;
-        }
-    }
+        if(!payload.attacker_id) return alert("Selecione quem fará a ação!");
 
-    async function addEntity() {
-        const name = document.getElementById('ent-name').value;
-        const hp = document.getElementById('ent-hp').value;
-        const type = document.getElementById('ent-type').value;
-
-        if(!currentTableId) return alert("Você precisa carregar uma mesa primeiro!");
-
-        const res = await fetch('/api/table/add_entity', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ table_id: currentTableId, name, hp, type })
-        });
-        const data = await res.json();
-        if(data.status === 'success') {
-            alert(data.message);
-            
-            // Limpa os campos após adicionar
-            document.getElementById('ent-name').value = '';
-            document.getElementById('ent-hp').value = '';
-            
-            fetchTableDetails(); // Atualiza a lista na tela
-        }
+        await fetch('/api/combat/action', { method: 'POST', headers:{'Content-Type': 'application/json'}, body: JSON.stringify(payload)});
+        fetchTableDetails(); // Atualiza instantaneamente a tela de quem bateu
     }
 </script>
 </body>
