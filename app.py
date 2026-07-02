@@ -1,15 +1,10 @@
 import os
 from flask import Flask, render_template, request, jsonify
+
+# Importação do Motor de Dados
 from engine.Dices import execute_roll_command
 
-# Força a Vercel a encontrar a pasta templates corretamente
-base_dir = os.path.abspath(os.path.dirname(__file__))
-template_dir = os.path.join(base_dir, 'templates')
-
-app = Flask(__name__, template_folder=template_dir)
-app.secret_key = os.environ.get("FLASK_SECRET_KEY", "super-secret-key-rpg")
-
-
+# Importações originais do seu projeto
 from core.table import Table
 from core.monster import Monster
 from core.npc import NPC
@@ -17,7 +12,11 @@ from core.player import Player
 from core.users.master_user import MasterUser
 from core.users.player_user import PlayerUser
 
-app = Flask(__name__)
+# Força a Vercel a encontrar a pasta templates corretamente
+base_dir = os.path.abspath(os.path.dirname(__file__))
+template_dir = os.path.join(base_dir, 'templates')
+
+app = Flask(__name__, template_folder=template_dir)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "super-secret-key-rpg")
 
 # Inicialização do Firebase adaptada do main.py
@@ -33,7 +32,7 @@ local_tables = {}
 local_entities = {}
 local_users = {}
 
-# FUNÇÕES DE PERSISTÊNCIA REAPROVEITADAS
+# --- FUNÇÕES DE PERSISTÊNCIA REAPROVEITADAS ---
 def persist_user(user):
     if firebase_enabled:
         try: save_user(user); return
@@ -70,7 +69,8 @@ def load_entity(entity_id):
         except Exception: pass
     return local_entities.get(entity_id)
 
-# ROTAS DA APLICAÇÃO
+
+# --- ROTAS DA APLICAÇÃO ---
 
 @app.route('/')
 def index():
@@ -123,7 +123,8 @@ def get_table_info(table_id):
     for ent_id in table.entity_ids:
         ent = load_entity(ent_id)
         if ent:
-            entities_details.append({"name": ent.name, "type": getattr(ent, 'entity_type', 'Desconhecido'), "hp": ent.current_hp})
+            # ADICIONADO: "id": ent.id
+            entities_details.append({"id": ent.id, "name": ent.name, "type": getattr(ent, 'entity_type', 'Desconhecido'), "hp": ent.current_hp})
             
     return jsonify({
         "status": "success",
@@ -178,17 +179,8 @@ def perform_combat_action():
 
     dice_result = dice_response["total_score"]
 
-    # Executar a ação utilizando as regras de POO da sua classe
+    # Executar a ação utilizando as regras de POO da classe Monster
     try:
         if getattr(ent, 'entity_type', '') == 'monster':
             action_result = ent.perform_action(action_name=action_name, dice_result=dice_result)
-            log_message = f"{ent.name} rolou um D{dice_type} ({dice_result})! Total: {action_result['total']}. Dano: {action_result['damage_type']}."
-        else:
-            log_message = f"{ent.name} rolou um D{dice_type} e tirou {dice_result}."
-            
-        return jsonify({"status": "success", "roll": dice_result, "log": log_message})
-    except Exception as e:
-        return jsonify({"status": "error", "message": f"Erro na ação: {str(e)}"}), 500
-
-if __name__ == '__main__':
-    app.run(debug=True)
+            log_message = f"{ent.name} atacou com um

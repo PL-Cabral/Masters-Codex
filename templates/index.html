@@ -77,6 +77,23 @@
             <p><strong>Estado do Jogo:</strong> <span id="current-table-state"></span></p>
             
             <h4>Entidades em Jogo (Monstros / NPCs):</h4>
+            <div id="master-combat-panel" style="display:none; margin-top: 20px; background: #2f3640; padding: 15px; border-radius: 5px; border-left: 4px solid #e84118;">
+                <h4>Painel de Combate (Rolagem Rápida)</h4>
+                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                    <select id="combat-entity-select" style="flex: 1;">
+                        <option value="">Selecione um Monstro...</option>
+                        </select>
+                    <select id="combat-dice" style="width: 100px;">
+                        <option value="20">D20</option>
+                        <option value="10">D10</option>
+                        <option value="6">D6</option>
+                    </select>
+                    <button onclick="rollMonsterAction()" style="width: 150px;">Ataque Base</button>
+                </div>
+                <div id="combat-log" style="margin-top: 15px; padding: 10px; background: #111; color: #4cd137; font-family: monospace; border-radius: 3px; min-height: 40px;">
+                    Aguardando rolagens...
+                </div>
+            </div>
             <ul id="entities-list"></ul>
 
             <div id="add-entity-form" style="display:none;">
@@ -148,7 +165,7 @@
         }
     }
 
-    async function fetchTableDetails() {
+   async function fetchTableDetails() {
         const tableId = document.getElementById('search-table-id').value || currentTableId;
         if(!tableId) return alert("Por favor, insira o Código da Mesa.");
 
@@ -160,17 +177,52 @@
             document.getElementById('table-view').style.display = 'block';
             document.getElementById('current-table-name').innerText = data.name;
             document.getElementById('current-table-id').innerText = data.id;
-            document.getElementById('current-table-state').innerText = data.state;
+            
+            // Mostrar Painel de combate apenas para o Mestre
+            if (currentUser && currentUser.role === 'master') {
+                document.getElementById('master-combat-panel').style.display = 'block';
+            }
 
             const list = document.getElementById('entities-list');
+            const select = document.getElementById('combat-entity-select');
+            
             list.innerHTML = '';
+            select.innerHTML = '<option value="">Selecione um Monstro/NPC...</option>';
+            
             data.entities.forEach(ent => {
+                // Lista de visualização
                 const li = document.createElement('li');
                 li.innerText = `${ent.name} (${ent.type}) - HP: ${ent.hp}`;
                 list.appendChild(li);
+                
+                // Dropdown de combate para o Mestre
+                const opt = document.createElement('option');
+                opt.value = ent.id; // Supondo que a API devolva o ID da entidade (ajuste na API se necessário)
+                opt.innerText = ent.name;
+                select.appendChild(opt);
             });
+        }
+    }
+
+    async function rollMonsterAction() {
+        const entityId = document.getElementById('combat-entity-select').value;
+        const diceType = document.getElementById('combat-dice').value;
+        
+        if(!entityId) return alert("Selecione um monstro para atacar!");
+
+        const res = await fetch('/api/combat/action', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ entity_id: entityId, dice_type: diceType })
+        });
+        
+        const data = await res.json();
+        const logBox = document.getElementById('combat-log');
+        
+        if(data.status === 'success') {
+            logBox.innerText = `> ${data.log}`;
         } else {
-            alert('Mesa não encontrada. Verifique o código e tente novamente.');
+            logBox.innerText = `> Erro: ${data.message}`;
         }
     }
 
