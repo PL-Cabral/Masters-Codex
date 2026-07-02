@@ -44,14 +44,21 @@
         
         <div class="box" id="master-actions" style="display:none;">
             <h3>Ações do Mestre</h3>
-            <div class="form-group">
+            
+            <!-- AÇÃO 1: CRIAR MESA -->
+            <div class="form-group" style="background: #333; padding: 15px; border-radius: 5px;">
+                <label>Criar Nova Sessão</label>
                 <input type="text" id="table-name" placeholder="Nome da Nova Mesa">
-                <button onclick="createTable()">Criar Nova Mesa</button>
+                <button onclick="createTable()" style="background-color: #ff4757;">Criar Mesa</button>
             </div>
+            
             <hr style="border-color: #444;">
-            <div class="form-group">
-                <input type="text" id="search-table-id" placeholder="Código da Mesa para Visualizar">
-                <button onclick="fetchTableDetails()">Carregar Mesa</button>
+            
+            <!-- AÇÃO 2: CARREGAR MESA -->
+            <div class="form-group" style="background: #333; padding: 15px; border-radius: 5px;">
+                <label>Carregar Sessão Existente</label>
+                <input type="text" id="search-table-id" placeholder="Cole o Código da Mesa aqui">
+                <button onclick="fetchTableDetails()" style="background-color: #2ed573; color: #000;">Carregar Mesa</button>
             </div>
         </div>
 
@@ -109,6 +116,8 @@
 
     async function createTable() {
         const tableName = document.getElementById('table-name').value;
+        if(!tableName) return alert("Digite um nome para a mesa.");
+        
         const res = await fetch('/api/table/create', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
@@ -116,15 +125,14 @@
         });
         const data = await res.json();
         if(data.status === 'success') {
-            alert(`Mesa Criada com Sucesso! Código: ${data.table_id}`);
-            currentTableId = data.table_id;
-            fetchTableDetails();
+            alert(`Mesa Criada com Sucesso!\n\nGuarde este Código: ${data.table_id}\n\nUse o campo "Carregar Sessão" abaixo para entrar nela.`);
+            document.getElementById('table-name').value = ''; // Limpa o campo
         }
     }
 
     async function fetchTableDetails() {
-        const tableId = currentTableId || document.getElementById('search-table-id').value;
-        if(!tableId) return;
+        const tableId = document.getElementById('search-table-id').value || currentTableId;
+        if(!tableId) return alert("Por favor, insira o Código da Mesa.");
 
         const res = await fetch(`/api/table/${tableId}`);
         const data = await res.json();
@@ -144,7 +152,7 @@
                 list.appendChild(li);
             });
         } else {
-            alert('Mesa não encontrada.');
+            alert('Mesa não encontrada. Verifique o código e tente novamente.');
         }
     }
 
@@ -152,6 +160,8 @@
         const name = document.getElementById('ent-name').value;
         const hp = document.getElementById('ent-hp').value;
         const type = document.getElementById('ent-type').value;
+
+        if(!currentTableId) return alert("Você precisa carregar uma mesa primeiro!");
 
         const res = await fetch('/api/table/add_entity', {
             method: 'POST',
@@ -161,7 +171,12 @@
         const data = await res.json();
         if(data.status === 'success') {
             alert(data.message);
-            fetchTableDetails();
+            
+            // Limpa os campos após adicionar
+            document.getElementById('ent-name').value = '';
+            document.getElementById('ent-hp').value = '';
+            
+            fetchTableDetails(); // Atualiza a lista na tela
         }
     }
 </script>
