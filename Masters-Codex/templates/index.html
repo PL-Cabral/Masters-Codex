@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Master's Codex - Web Panel</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #1a1a1a; color: #e0e0e0; margin: 0; padding: 20px; }
+        .container { max-width: 900px; margin: 0 auto; background: #2d2d2d; padding: 30px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
+        h1, h2 { color: #ff4757; border-bottom: 2px solid #3a3a3a; padding-bottom: 10px; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input, select, button { width: 100%; padding: 10px; border-radius: 4px; border: 1px solid #444; background: #3a3a3a; color: #fff; box-sizing: border-box; }
+        button { background-color: #ff4757; font-weight: bold; cursor: pointer; border: none; margin-top: 10px; }
+        button:hover { background-color: #e84118; }
+        .dashboard { display: none; margin-top: 20px; }
+        .status-badge { display: inline-block; padding: 5px 10px; background: #2ed573; color: #fff; border-radius: 4px; font-size: 12px; margin-bottom: 15px; }
+        .box { background: #222; padding: 15px; border-radius: 6px; margin-bottom: 15px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>MASTER'S CODEX</h1>
+    <div class="status-badge">Modo Operacional: Vercel Web Cloud</div>
+
+    <div id="login-screen">
+        <h2>Acesso ao Sistema</h2>
+        <div class="form-group">
+            <label>Nome do Usuário:</label>
+            <input type="text" id="username" placeholder="Digite seu nome...">
+        </div>
+        <div class="form-group">
+            <label>Cargo:</label>
+            <select id="role">
+                <option value="master">Mestre (DM)</option>
+                <option value="player">Jogador</option>
+            </select>
+        </div>
+        <button onclick="login()">Entrar no Codex</button>
+    </div>
+
+    <div id="dashboard" class="dashboard">
+        <h2>Painel de Controle (<span id="user-display"></span>)</h2>
+        
+        <div class="box" id="master-actions" style="display:none;">
+            <h3>Ações do Mestre</h3>
+            <div class="form-group">
+                <input type="text" id="table-name" placeholder="Nome da Nova Mesa">
+                <button onclick="createTable()">Criar Nova Mesa</button>
+            </div>
+            <hr style="border-color: #444;">
+            <div class="form-group">
+                <input type="text" id="search-table-id" placeholder="Código da Mesa para Visualizar">
+                <button onclick="fetchTableDetails()">Carregar Mesa</button>
+            </div>
+        </div>
+
+        <div class="box" id="table-view" style="display:none;">
+            <h3>Dados da Mesa Atual: <span id="current-table-name" style="color: #2ed573;"></span></h3>
+            <p><strong>ID da Mesa:</strong> <span id="current-table-id"></span></p>
+            <p><strong>Estado do Jogo:</strong> <span id="current-table-state"></span></p>
+            
+            <h4>Entidades em Jogo (Monstros / NPCs):</h4>
+            <ul id="entities-list"></ul>
+
+            <div id="add-entity-form" style="display:none;">
+                <h4>Adicionar Monstro/NPC à Mesa</h4>
+                <input type="text" id="ent-name" placeholder="Nome da Entidade" style="margin-bottom: 5px;">
+                <input type="number" id="ent-hp" placeholder="HP Máximo" style="margin-bottom: 5px;">
+                <select id="ent-type" style="margin-bottom: 5px;">
+                    <option value="monster">Monstro</option>
+                    <option value="npc">NPC</option>
+                </select>
+                <button onclick="addEntity()">Inserir Entidade</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    let currentUser = null;
+    let currentTableId = null;
+
+    async function login() {
+        const username = document.getElementById('username').value;
+        const role = document.getElementById('role').value;
+
+        const res = await fetch('/api/login', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ username, role })
+        });
+        const data = await res.json();
+
+        if(data.status === 'success') {
+            currentUser = data;
+            document.getElementById('login-screen').style.display = 'none';
+            document.getElementById('dashboard').style.display = 'block';
+            document.getElementById('user-display').innerText = `${data.username} - ${data.role.toUpperCase()}`;
+            
+            if(data.role === 'master') {
+                document.getElementById('master-actions').style.display = 'block';
+                document.getElementById('add-entity-form').style.display = 'block';
+            } else {
+                document.getElementById('table-view').style.display = 'block';
+            }
+        }
+    }
+
+    async function createTable() {
+        const tableName = document.getElementById('table-name').value;
+        const res = await fetch('/api/table/create', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ table_name: tableName, master_id: currentUser.user_id })
+        });
+        const data = await res.json();
+        if(data.status === 'success') {
+            alert(`Mesa Criada com Sucesso! Código: ${data.table_id}`);
+            currentTableId = data.table_id;
+            fetchTableDetails();
+        }
+    }
+
+    async function fetchTableDetails() {
+        const tableId = currentTableId || document.getElementById('search-table-id').value;
+        if(!tableId) return;
+
+        const res = await fetch(`/api/table/${tableId}`);
+        const data = await res.json();
+
+        if(data.status === 'success') {
+            currentTableId = data.id;
+            document.getElementById('table-view').style.display = 'block';
+            document.getElementById('current-table-name').innerText = data.name;
+            document.getElementById('current-table-id').innerText = data.id;
+            document.getElementById('current-table-state').innerText = data.state;
+
+            const list = document.getElementById('entities-list');
+            list.innerHTML = '';
+            data.entities.forEach(ent => {
+                const li = document.createElement('li');
+                li.innerText = `${ent.name} (${ent.type}) - HP: ${ent.hp}`;
+                list.appendChild(li);
+            });
+        } else {
+            alert('Mesa não encontrada.');
+        }
+    }
+
+    async function addEntity() {
+        const name = document.getElementById('ent-name').value;
+        const hp = document.getElementById('ent-hp').value;
+        const type = document.getElementById('ent-type').value;
+
+        const res = await fetch('/api/table/add_entity', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ table_id: currentTableId, name, hp, type })
+        });
+        const data = await res.json();
+        if(data.status === 'success') {
+            alert(data.message);
+            fetchTableDetails();
+        }
+    }
+</script>
+</body>
+</html>
