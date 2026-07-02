@@ -2,89 +2,83 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Master's Codex - VTT Web</title>
+    <title>Master's Codex</title>
     <style>
-        body { font-family: 'Segoe UI', sans-serif; background: #1a1a1a; color: #fff; padding: 20px; }
-        .container { max-width: 1000px; margin: auto; background: #222; padding: 20px; border-radius: 8px; }
-        input, select, button { width: 100%; padding: 10px; margin-top: 5px; background: #333; color: white; border: 1px solid #555; }
+        body { background: #1a1a1a; color: #fff; font-family: sans-serif; display: flex; justify-content: center; padding-top: 50px; }
+        .box { background: #222; padding: 30px; border-radius: 8px; width: 400px; }
+        input, select, button { width: 100%; padding: 10px; margin: 5px 0; background: #333; color: #fff; border: 1px solid #555; }
         button { background: #ff4757; font-weight: bold; cursor: pointer; }
-        #vtt-screen { display: none; }
-        .list-item { background: #333; padding: 10px; margin-bottom: 5px; border-radius: 4px; display: flex; justify-content: space-between; }
     </style>
 </head>
 <body>
-<div class="container">
+<div class="box">
     <h1>MASTER'S CODEX</h1>
     <div id="login-screen">
-        <select id="role-select"><option value="master">Mestre</option><option value="player">Jogador</option></select>
-        <input type="text" id="username" placeholder="Nome">
-        <input type="text" id="login-table-id" placeholder="Código da Mesa">
-        <button onclick="performLogin()">Entrar</button>
-    </div>
-    
-    <div id="char-creation-screen" style="display:none;">
-        <h2>Criação de Personagem</h2>
-        <select id="char-class"><option value="Guerreiro">Guerreiro</option><option value="Mago">Mago</option></select>
-        <button onclick="finalizeCharCreation()">Salvar e Entrar</button>
+        <select id="role" onchange="updateUI()">
+            <option value="master">Mestre</option>
+            <option value="player">Jogador</option>
+        </select>
+        <input type="text" id="username" placeholder="Seu Nome">
+        <div id="table-fields">
+            <input type="text" id="table-id" placeholder="Código da Mesa">
+            <input type="password" id="password" placeholder="Senha (Mestre)">
+        </div>
+        <button onclick="login()">Entrar</button>
     </div>
 
-    <div id="vtt-screen">
-        <h2 id="table-name-display">Carregando...</h2>
-        <div id="players-list"></div>
-        <div id="monsters-list"></div>
+    <div id="char-creation" style="display:none;">
+        <h2>Criação de Personagem</h2>
+        <select id="char-class"><option>Guerreiro</option><option>Mago</option><option>Assassino</option></select>
+        <button onclick="saveChar()">Salvar e Entrar</button>
+    </div>
+
+    <div id="vtt-screen" style="display:none;">
+        <h2 id="table-name"></h2>
+        <div id="content"></div>
     </div>
 </div>
-
 <script>
-    let currentUser = null, currentTableId = null;
-
-    async function performLogin() {
+    let currentTable = null;
+    function updateUI() {
+        const role = document.getElementById('role').value;
+        document.getElementById('password').style.display = role === 'master' ? 'block' : 'none';
+    }
+    async function login() {
+        const role = document.getElementById('role').value;
         const username = document.getElementById('username').value;
-        const tableId = document.getElementById('login-table-id').value;
-        const role = document.getElementById('role-select').value;
+        const table_id = document.getElementById('table-id').value;
+        const password = document.getElementById('password').value;
+
+        const endpoint = role === 'master' ? '/api/login/master' : '/api/login/player';
+        const res = await fetch(endpoint, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({username, table_id, password})});
+        const data = await res.json();
         
-        if(role === 'player') {
-            const res = await fetch('/api/login/player', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({username, table_id: tableId})});
-            const data = await res.json();
-            if(data.status === 'success') {
-                currentTableId = tableId; 
-                startVTT();
-            } else {
-                document.getElementById('login-screen').style.display = 'none';
-                document.getElementById('char-creation-screen').style.display = 'block';
-                currentTableId = tableId; // Salva o ID da mesa para a criação
-            }
+        if(data.status === 'success') {
+            currentTable = data.table_id || table_id;
+            document.getElementById('login-screen').style.display = 'none';
+            document.getElementById('vtt-screen').style.display = 'block';
+            loadTable();
+        } else if(data.status === 'needs_creation') {
+            currentTable = table_id;
+            document.getElementById('login-screen').style.display = 'none';
+            document.getElementById('char-creation').style.display = 'block';
+        } else { alert(data.message); }
+    }
+    async function saveChar() {
+        const res = await fetch('/api/player/create_character', {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({username: document.getElementById('username').value, table_id: currentTable, char_class: document.getElementById('char-class').value})
+        });
+        if((await res.json()).status === 'success') {
+            document.getElementById('char-creation').style.display = 'none';
+            document.getElementById('vtt-screen').style.display = 'block';
+            loadTable();
         }
     }
-
-    async function finalizeCharCreation() {
-        const res = await fetch('/api/player/create_character', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({
-                username: document.getElementById('username').value,
-                table_id: currentTableId,
-                char_class: document.getElementById('char-class').value,
-                attributes: {con: 14} 
-            })
-        });
+    async function loadTable() {
+        const res = await fetch(`/api/table/${currentTable}`);
         const data = await res.json();
-        if(data.status === 'success') startVTT();
-    }
-
-    function startVTT() {
-        document.getElementById('login-screen').style.display = 'none';
-        document.getElementById('char-creation-screen').style.display = 'none';
-        document.getElementById('vtt-screen').style.display = 'block';
-        setInterval(fetchTableDetails, 3000);
-    }
-
-    async function fetchTableDetails() {
-        if(!currentTableId) return;
-        const res = await fetch(`/api/table/${currentTableId}`);
-        const data = await res.json();
-        document.getElementById('table-name-display').innerText = data.name;
-        // Renderize as listas aqui usando data.players e data.monsters
+        document.getElementById('table-name').innerText = "Sessão: " + data.name;
     }
 </script>
 </body>
