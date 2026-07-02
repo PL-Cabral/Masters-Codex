@@ -1,2 +1,513 @@
-flask
-firebase-admin
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Master's Codex - VTT Web</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #1a1a1a; color: #e0e0e0; margin: 0; padding: 20px; }
+        .container { max-width: 1100px; margin: 0 auto; background: #2d2d2d; padding: 30px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
+        h1, h2, h3, h4 { color: #ff4757; margin-top: 0; }
+        h2 { border-bottom: 2px solid #3a3a3a; padding-bottom: 10px; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; color: #ccc; font-size: 14px;}
+        input, select, button { width: 100%; padding: 10px; border-radius: 4px; border: 1px solid #444; background: #3a3a3a; color: #fff; box-sizing: border-box; }
+        input[type="checkbox"] { width: auto; margin-right: 10px; }
+        button { background-color: #ff4757; font-weight: bold; cursor: pointer; border: none; margin-top: 5px; }
+        button:hover { background-color: #e84118; }
+        .box { background: #222; padding: 15px; border-radius: 6px; margin-bottom: 15px; }
+        .flex-row { display: flex; gap: 10px; align-items: center; }
+        .flex-row > * { flex: 1; }
+        .badge { background: #2ed573; color: #000; padding: 2px 6px; border-radius: 3px; font-size: 12px; font-weight: bold;}
+        .hp-bar { background: #4cd137; height: 10px; border-radius: 5px; transition: width 0.3s; }
+        .stat-row { display: flex; justify-content: space-between; align-items: center; background: #333; padding: 8px; margin-bottom: 5px; border-radius: 4px; }
+        .stat-btn { background: #555; padding: 5px 10px; width: auto; }
+        .quick-btn { padding: 4px 8px; font-size: 11px; margin-left: 5px; border-radius: 3px; cursor: pointer; width: auto;}
+        .btn-heal { background-color: #2ed573; color: #000; }
+        .btn-dmg { background-color: #ff4757; }
+        #combat-log-box { background: #000; color: #00ff00; font-family: monospace; padding: 15px; height: 200px; overflow-y: auto; border-radius: 5px; border: 1px solid #333;}
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>MASTER'S CODEX</h1>
+    
+    <!-- TELA DE LOGIN -->
+    <div id="login-screen">
+        <h2>Acesso à Sessão</h2>
+        <div class="form-group">
+            <label>Qual sua função?</label>
+            <select id="role-select" onchange="toggleLoginFields()">
+                <option value="master">Sou o Mestre (GM)</option>
+                <option value="player">Sou Jogador</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Nome do Usuário/Personagem:</label>
+            <input type="text" id="username" placeholder="Digite seu nome...">
+        </div>
+        
+        <div id="dynamic-login-fields" style="background: #333; padding: 15px; border-radius: 5px; margin-bottom: 15px;">
+            <div id="master-options">
+                <label style="cursor: pointer; display: flex; align-items: center; color: #fff;">
+                    <input type="checkbox" id="has-existing-table" onchange="toggleMasterTableFields()">
+                    Sou GM e vou carregar uma mesa que já existe.
+                </label>
+            </div>
+            
+            <div id="table-credentials" style="display: none; margin-top: 15px;">
+                <div class="form-group">
+                    <label>ID da Mesa (Código):</label>
+                    <input type="text" id="login-table-id" placeholder="Ex: 1234-abcd">
+                </div>
+                <div class="form-group" id="gm-password-box">
+                    <label>Senha do Mestre:</label>
+                    <input type="password" id="login-password" placeholder="Sua senha criada para esta mesa">
+                </div>
+            </div>
+        </div>
+        <button onclick="performLogin()">Entrar</button>
+    </div>
+
+    <!-- TELA DE CRIAÇÃO DE PERSONAGEM (PLAYER) -->
+    <div id="char-creation-screen" style="display:none;">
+        <h2>Criação de Personagem - 1ª Vez</h2>
+        <p>Bem-vindo à mesa! Escolha sua classe e distribua <strong id="points-left" style="color:#ff4757;">7</strong> pontos adicionais.</p>
+        
+        <div class="form-group">
+            <select id="char-class" onchange="loadBaseStats()">
+                <option value="Guerreiro">Guerreiro (Corpo-a-corpo)</option>
+                <option value="Mago">Mago (Feitiços)</option>
+                <option value="Assassino">Assassino (Furtividade)</option>
+            </select>
+        </div>
+        
+        <div class="box">
+            <div class="stat-row"><span>HP Máximo</span> <span id="char-hp">20</span></div>
+            <div class="stat-row"><span>Força (STR)</span> <div class="flex-row"><button class="stat-btn" onclick="changeStat('str', -1)">-</button><span id="stat-str">15</span><button class="stat-btn" onclick="changeStat('str', 1)">+</button></div></div>
+            <div class="stat-row"><span>Destreza (DEX)</span> <div class="flex-row"><button class="stat-btn" onclick="changeStat('dex', -1)">-</button><span id="stat-dex">12</span><button class="stat-btn" onclick="changeStat('dex', 1)">+</button></div></div>
+            <div class="stat-row"><span>Constituição (CON)</span> <div class="flex-row"><button class="stat-btn" onclick="changeStat('con', -1)">-</button><span id="stat-con">14</span><button class="stat-btn" onclick="changeStat('con', 1)">+</button></div></div>
+            <div class="stat-row"><span>Inteligência (INT)</span> <div class="flex-row"><button class="stat-btn" onclick="changeStat('int', -1)">-</button><span id="stat-int">8</span><button class="stat-btn" onclick="changeStat('int', 1)">+</button></div></div>
+            <div class="stat-row"><span>Sabedoria (WIS)</span> <div class="flex-row"><button class="stat-btn" onclick="changeStat('wis', -1)">-</button><span id="stat-wis">10</span><button class="stat-btn" onclick="changeStat('wis', 1)">+</button></div></div>
+            <div class="stat-row"><span>Carisma (CHA)</span> <div class="flex-row"><button class="stat-btn" onclick="changeStat('cha', -1)">-</button><span id="stat-cha">10</span><button class="stat-btn" onclick="changeStat('cha', 1)">+</button></div></div>
+        </div>
+        <button onclick="finalizeCharCreation()" style="background-color: #2ed573; color: #000;">Salvar e Entrar na Mesa</button>
+    </div>
+
+    <!-- MESA VIRTUAL / DASHBOARD -->
+    <div id="vtt-screen" style="display:none;">
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #444; padding-bottom: 10px; margin-bottom: 20px;">
+            <h2 style="margin: 0;">Sessão: <span id="table-name-display" style="color:#2ed573;"></span></h2>
+            <div class="badge" style="font-size: 14px;">Código: <span id="table-id-display"></span></div>
+        </div>
+
+        <div style="display: flex; gap: 20px; flex-wrap: wrap;">
+            <!-- COLUNA ESQUERDA: Ações e Ferramentas -->
+            <div style="flex: 1; min-width: 300px;">
+                
+                <!-- MESTRE: Criar Mesa -->
+                <div id="gm-create-table-panel" class="box" style="display:none; background: #30171a; border: 1px solid #ff4757;">
+                    <h3 style="color: #ff9f43;">Inicializar Nova Mesa</h3>
+                    <div class="form-group"><label>Nome da Campanha:</label><input type="text" id="new-table-name"></div>
+                    <div class="form-group"><label>Senha de Segurança do GM:</label><input type="password" id="new-table-password"></div>
+                    <button onclick="createTable()">Gerar Mesa</button>
+                </div>
+
+                <!-- MESTRE: Add Entidades -->
+                <div id="gm-tools" class="box" style="display:none; background: #30171a;">
+                    <h4 style="color: #ff9f43; margin-bottom: 15px;">Invocar Monstro/NPC</h4>
+                    
+                    <div class="form-group flex-row">
+                        <div style="flex: 2;"><label>Tipo:</label>
+                            <select id="mob-type" onchange="loadMobBaseStats()">
+                                <option value="Goblin">Goblin</option>
+                                <option value="Orc">Orc</option>
+                                <option value="Slime">Slime</option>
+                                <option value="Aranha">Aranha Gigante</option>
+                            </select>
+                        </div>
+                        <div style="flex: 1;"><label>Nível:</label><input type="number" id="mob-level" value="1" min="1" onchange="loadMobBaseStats()"></div>
+                    </div>
+                    
+                    <div class="form-group"><label>Nome Específico:</label><input type="text" id="mob-name" placeholder="Ex: Chefe Orc"></div>
+                    
+                    <div class="form-group flex-row">
+                        <div><label>HP Max:</label><input type="number" id="mob-hp"></div>
+                        <div><label>Força (STR):</label><input type="number" id="mob-str"></div>
+                        <div><label>Destreza:</label><input type="number" id="mob-dex"></div>
+                    </div>
+                    <button onclick="addMob()">Adicionar à Mesa</button>
+                </div>
+
+                <!-- PAINEL DE AÇÃO -->
+                <div class="box" style="background: #192a56;" id="action-panel">
+                    <h3>Central de Rolagens</h3>
+                    <div class="form-group">
+                        <label>Agente (Quem faz a ação):</label>
+                        <select id="action-actor"><option value="">Selecione...</option></select>
+                    </div>
+                    <div class="form-group">
+                        <label>Ação / Ataque / Teste:</label>
+                        <div class="flex-row">
+                            <select id="action-type" style="flex: 2;">
+                                <option value="Ataque Físico">Ataque Físico</option>
+                                <option value="Ataque Mágico">Ataque Mágico</option>
+                                <option value="Cura">Cura</option>
+                                <option value="Teste de Força">Teste de Força</option>
+                                <option value="Teste de Inteligência">Teste de Inteligência</option>
+                                <option value="Teste de Carisma">Teste de Carisma</option>
+                                <option value="Salva-vidas">Salva-vidas</option>
+                            </select>
+                            <select id="action-dice" style="flex: 1;">
+                                <option value="20">D20</option>
+                                <option value="12">D12</option>
+                                <option value="10">D10</option>
+                                <option value="6">D6</option>
+                                <option value="4">D4</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Alvo (Quem recebe o efeito):</label>
+                        <select id="action-target"><option value="">Nenhum / Área</option></select>
+                    </div>
+                    <button onclick="performAction()" style="background-color: #3742fa; font-size: 16px;">Executar Ação!</button>
+                </div>
+            </div>
+
+            <!-- COLUNA DIREITA: Listas e Log -->
+            <div style="flex: 1.5; min-width: 400px;">
+                <div class="box">
+                    <h3>Integrantes da Sessão</h3>
+                    <h4 style="color:#2ed573; border-bottom: 1px solid #444; padding-bottom: 5px;">Jogadores</h4>
+                    <ul id="players-list" style="list-style: none; padding: 0; margin: 0 0 20px 0;"></ul>
+                    
+                    <h4 style="color:#ff4757; border-bottom: 1px solid #444; padding-bottom: 5px;">Ameaças (Mobs & NPCs)</h4>
+                    <ul id="monsters-list" style="list-style: none; padding: 0; margin: 0;"></ul>
+                </div>
+
+                <div class="box">
+                    <h3>Terminal de Eventos</h3>
+                    <div id="combat-log-box"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    let currentUser = null;
+    let currentTableId = null;
+    let pollingInterval = null;
+    let lastTableDataString = ""; // Evita o "Flickering" (piscar da tela)
+
+    const classStats = {
+        "Guerreiro": { hp: 20, str: 15, dex: 12, con: 14, int: 8, wis: 10, cha: 10 },
+        "Mago": { hp: 12, str: 8, dex: 12, con: 10, int: 15, wis: 14, cha: 10 },
+        "Assassino": { hp: 15, str: 10, dex: 15, con: 12, int: 10, wis: 10, cha: 14 }
+    };
+
+    const mobBase = {
+        "Goblin": { hp: 10, str: 8, dex: 14, threat: 1 },
+        "Orc": { hp: 20, str: 16, dex: 10, threat: 2 },
+        "Slime": { hp: 15, str: 10, dex: 8, threat: 1 },
+        "Aranha": { hp: 12, str: 12, dex: 16, threat: 1 }
+    };
+
+    let charCreationData = { points: 7, base: {} };
+
+    // --- CONTROLE DA TELA DE LOGIN ---
+    function toggleLoginFields() {
+        const role = document.getElementById('role-select').value;
+        const credBox = document.getElementById('table-credentials');
+        const masterOpts = document.getElementById('master-options');
+        const gmPassBox = document.getElementById('gm-password-box');
+        
+        if (role === 'player') {
+            masterOpts.style.display = 'none';
+            credBox.style.display = 'block';
+            gmPassBox.style.display = 'none'; // Jogador não tem senha!
+        } else {
+            masterOpts.style.display = 'block';
+            credBox.style.display = document.getElementById('has-existing-table').checked ? 'block' : 'none';
+            gmPassBox.style.display = 'block';
+        }
+    }
+
+    function toggleMasterTableFields() {
+        document.getElementById('table-credentials').style.display = document.getElementById('has-existing-table').checked ? 'block' : 'none';
+    }
+
+    window.onload = toggleLoginFields;
+
+    async function performLogin() {
+        const role = document.getElementById('role-select').value;
+        const username = document.getElementById('username').value;
+        const tableId = document.getElementById('login-table-id').value;
+        const password = document.getElementById('login-password').value;
+        
+        if(!username) return alert("Digite seu nome!");
+
+        if(role === 'master') {
+            if(document.getElementById('has-existing-table').checked && (!tableId || !password)) {
+                return alert("Para carregar uma mesa, forneça o ID e a Senha do Mestre.");
+            }
+            const res = await fetch('/api/login/master', { method: 'POST', headers:{'Content-Type': 'application/json'}, body: JSON.stringify({username, table_id: tableId, password})});
+            const data = await res.json();
+            
+            if(data.status === 'success') {
+                currentUser = data;
+                document.getElementById('login-screen').style.display = 'none';
+                document.getElementById('vtt-screen').style.display = 'block';
+                
+                if (data.table_id) {
+                    currentTableId = data.table_id;
+                    document.getElementById('gm-tools').style.display = 'block';
+                    startVTT();
+                } else {
+                    document.getElementById('gm-create-table-panel').style.display = 'block';
+                    document.getElementById('action-panel').style.display = 'none';
+                }
+            } else {
+                alert(data.message);
+            }
+        } else {
+            if(!tableId) return alert("O ID da mesa é obrigatório para jogar.");
+            charCreationData.temp = {username, tableId};
+
+            const res = await fetch('/api/login/player', { method: 'POST', headers:{'Content-Type': 'application/json'}, body: JSON.stringify({username, table_id: tableId})});
+            const data = await res.json();
+            
+            if(data.status === 'success') {
+                currentUser = data;
+                currentTableId = tableId;
+                startVTT();
+            } else if (data.status === 'needs_creation') {
+                document.getElementById('login-screen').style.display = 'none';
+                document.getElementById('char-creation-screen').style.display = 'block';
+                loadBaseStats();
+            } else {
+                alert(data.message);
+            }
+        }
+    }
+
+    // --- CRIAÇÃO DE PERSONAGEM ---
+    function loadBaseStats() {
+        const c = document.getElementById('char-class').value;
+        charCreationData.base = {...classStats[c]};
+        charCreationData.points = 7;
+        updateCharUI();
+    }
+
+    function changeStat(stat, val) {
+        if(val > 0 && charCreationData.points > 0) {
+            charCreationData.base[stat]++;
+            charCreationData.points--;
+        } else if (val < 0 && charCreationData.base[stat] > classStats[document.getElementById('char-class').value][stat]) {
+            charCreationData.base[stat]--;
+            charCreationData.points++;
+        }
+        updateCharUI();
+    }
+
+    function updateCharUI() {
+        document.getElementById('points-left').innerText = charCreationData.points;
+        document.getElementById('char-hp').innerText = charCreationData.base.hp;
+        ['str','dex','con','int','wis','cha'].forEach(s => { document.getElementById(`stat-${s}`).innerText = charCreationData.base[s]; });
+    }
+
+    async function finalizeCharCreation() {
+        const payload = {
+            username: charCreationData.temp.username,
+            table_id: charCreationData.temp.tableId,
+            char_class: document.getElementById('char-class').value,
+            hp: charCreationData.base.hp,
+            attributes: charCreationData.base
+        };
+
+        const res = await fetch('/api/player/create_character', { method: 'POST', headers:{'Content-Type': 'application/json'}, body: JSON.stringify(payload)});
+        const data = await res.json();
+        
+        if(data.status === 'success') {
+            currentUser = data;
+            currentTableId = data.table_id;
+            
+            // Corrige o Redirecionamento da UI
+            document.getElementById('char-creation-screen').style.display = 'none';
+            startVTT();
+        }
+    }
+
+    // --- AÇÕES DO MESTRE (CRIAR MESA E MOBS) ---
+    async function createTable() {
+        const name = document.getElementById('new-table-name').value;
+        const pass = document.getElementById('new-table-password').value;
+        if(!name || !pass) return alert("Forneça Nome e Senha para a mesa!");
+        
+        const res = await fetch('/api/table/create', { method: 'POST', headers:{'Content-Type': 'application/json'}, body: JSON.stringify({table_name: name, master_id: currentUser.user_id, password: pass})});
+        const data = await res.json();
+        if(data.status === 'success') {
+            alert(`Mesa Criada!\nID: ${data.table_id}\nSenha Mestre: ${pass}`);
+            currentTableId = data.table_id;
+            document.getElementById('gm-create-table-panel').style.display = 'none';
+            document.getElementById('gm-tools').style.display = 'block';
+            document.getElementById('action-panel').style.display = 'block';
+            startVTT();
+            loadMobBaseStats();
+        }
+    }
+
+    function loadMobBaseStats() {
+        const type = document.getElementById('mob-type').value;
+        const level = parseInt(document.getElementById('mob-level').value) || 1;
+        const base = mobBase[type];
+        
+        document.getElementById('mob-name').value = `${type} Nv.${level}`;
+        document.getElementById('mob-hp').value = base.hp + (level * 5);
+        document.getElementById('mob-str').value = base.str + Math.floor(level/2);
+        document.getElementById('mob-dex').value = base.dex + Math.floor(level/2);
+    }
+
+    async function addMob() {
+        const payload = {
+            table_id: currentTableId,
+            type: 'monster',
+            monster_type: document.getElementById('mob-type').value,
+            name: document.getElementById('mob-name').value,
+            level: document.getElementById('mob-level').value,
+            hp: document.getElementById('mob-hp').value,
+            threat: mobBase[document.getElementById('mob-type').value].threat,
+            attributes: {
+                strength: document.getElementById('mob-str').value,
+                dexterity: document.getElementById('mob-dex').value
+            }
+        };
+
+        await fetch('/api/table/add_entity', { method: 'POST', headers:{'Content-Type': 'application/json'}, body: JSON.stringify(payload)});
+        fetchTableDetails(); 
+    }
+
+    // --- VTT CORE E TEMPO REAL SMOOTH (NO FLICKER) ---
+    function startVTT() {
+        document.getElementById('login-screen').style.display = 'none';
+        document.getElementById('vtt-screen').style.display = 'block';
+        fetchTableDetails();
+        if(pollingInterval) clearInterval(pollingInterval);
+        pollingInterval = setInterval(fetchTableDetails, 3000);
+    }
+
+    async function fetchTableDetails() {
+        if(!currentTableId) return;
+        const res = await fetch(`/api/table/${currentTableId}`);
+        const data = await res.json();
+
+        if(data.status === 'success') {
+            // O Segredo Anti-Flicker: Compara o hash da mesa. Só atualiza a tela se algo tiver mudado!
+            const newDataString = JSON.stringify(data);
+            if (newDataString === lastTableDataString) return;
+            lastTableDataString = newDataString;
+
+            document.getElementById('table-name-display').innerText = data.name;
+            document.getElementById('table-id-display').innerText = data.id;
+
+            const actorSelect = document.getElementById('action-actor');
+            const targetSelect = document.getElementById('action-target');
+            const currentActor = actorSelect.value;
+            const currentTarget = targetSelect.value;
+
+            actorSelect.innerHTML = '<option value="">Selecione...</option>';
+            targetSelect.innerHTML = '<option value="">Nenhum / Área</option>';
+
+            const pList = document.getElementById('players-list');
+            const mList = document.getElementById('monsters-list');
+            pList.innerHTML = ''; mList.innerHTML = '';
+
+            const renderEntity = (ent, listEl) => {
+                const li = document.createElement('li');
+                li.style.marginBottom = '10px';
+                li.style.background = '#2c2c2c';
+                li.style.padding = '10px';
+                li.style.borderRadius = '5px';
+                li.style.borderLeft = ent.hp <= 0 ? '4px solid #444' : (ent.type === 'player' ? '4px solid #2ed573' : '4px solid #ff4757');
+                
+                const percent = Math.max(0, Math.min(100, (ent.hp / ent.max_hp) * 100));
+                let status = ent.hp <= 0 ? '(Derrotado)' : '';
+                
+                let quickBtns = '';
+                if (currentUser.role === 'master' && ent.hp > 0) {
+                    quickBtns = `
+                        <div>
+                            <button class="quick-btn btn-dmg" onclick="quickAdjust('${ent.id}', 5, false)">-5 HP</button>
+                            <button class="quick-btn btn-heal" onclick="quickAdjust('${ent.id}', 5, true)">+5 HP</button>
+                        </div>
+                    `;
+                }
+
+                li.innerHTML = `
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                        <div>
+                            <strong style="${ent.hp <= 0 ? 'text-decoration: line-through; color: #888;' : ''}">${ent.name}</strong> 
+                            <span style="color:#aaa; font-size:12px; margin-left: 5px;">[${ent.class}] ${status}</span>
+                        </div>
+                        <div style="display:flex; align-items:center; gap: 10px;">
+                            <span style="font-weight:bold; font-family:monospace;">${ent.hp}/${ent.max_hp}</span>
+                            ${quickBtns}
+                        </div>
+                    </div>
+                    <div style="background:#111; width:100%; height:10px; border-radius:5px; overflow:hidden;">
+                        <div class="hp-bar" style="width:${percent}%; background:${percent < 30 ? '#ff4757' : (ent.type==='player' ? '#2ed573' : '#ff9f43')}"></div>
+                    </div>
+                `;
+                listEl.appendChild(li);
+
+                if(ent.hp > 0) {
+                    if(currentUser.role === 'master' || (currentUser.role === 'player' && ent.id === currentUser.char_id)) {
+                        actorSelect.innerHTML += `<option value="${ent.id}">${ent.name}</option>`;
+                    }
+                    targetSelect.innerHTML += `<option value="${ent.id}">${ent.name}</option>`;
+                }
+            };
+
+            data.players.forEach(p => renderEntity(p, pList));
+            data.monsters.forEach(m => renderEntity(m, mList));
+
+            // Restaura seleção dos Dropdowns se ainda existirem
+            if(currentActor && actorSelect.querySelector(`option[value="${currentActor}"]`)) actorSelect.value = currentActor;
+            if(currentTarget && targetSelect.querySelector(`option[value="${currentTarget}"]`)) targetSelect.value = currentTarget;
+
+            const logBox = document.getElementById('combat-log-box');
+            logBox.innerHTML = data.logs.join('<br><br>');
+            logBox.scrollTop = logBox.scrollHeight;
+        }
+    }
+
+    async function performAction() {
+        const payload = {
+            table_id: currentTableId,
+            attacker_id: document.getElementById('action-actor').value,
+            target_id: document.getElementById('action-target').value,
+            action_name: document.getElementById('action-type').value,
+            dice_type: document.getElementById('action-dice').value
+        };
+
+        if(!payload.attacker_id) return alert("Selecione quem fará a ação!");
+
+        await fetch('/api/combat/action', { method: 'POST', headers:{'Content-Type': 'application/json'}, body: JSON.stringify(payload)});
+        lastTableDataString = ""; // Força atualização da tela
+        fetchTableDetails(); 
+    }
+
+    async function quickAdjust(targetId, amount, isHeal) {
+        if(!confirm(`Confirmar ${isHeal ? 'Cura' : 'Dano'} de ${amount}?`)) return;
+        await fetch('/api/combat/quick_adjust', { 
+            method: 'POST', 
+            headers:{'Content-Type': 'application/json'}, 
+            body: JSON.stringify({ table_id: currentTableId, target_id: targetId, amount: amount, is_heal: isHeal })
+        });
+        lastTableDataString = ""; 
+        fetchTableDetails();
+    }
+</script>
+</body>
+</html>
