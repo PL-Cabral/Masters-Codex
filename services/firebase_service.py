@@ -2,39 +2,39 @@ import os
 import json
 import firebase_admin
 from firebase_admin import credentials
-from firebase_admin import db
+from firebase_admin import db 
 
+# IMPORTAÇÕES NECESSÁRIAS PARA AS FUNÇÕES DE CRUD FUNCIONAREM
+from core.table import Table
+from core.monster import Monster
+from core.npc import NPC
+from core.player import Player
+from core.users.master_user import MasterUser
+from core.users.player_user import PlayerUser
 
 firebase_creds = os.environ.get('FIREBASE_CREDENTIALS')
 
 if firebase_creds:
-    # Nuvem (Vercel): Carrega credenciais da variável de ambiente
+    # Nuvem (Vercel)
     cred_dict = json.loads(firebase_creds)
     cred = credentials.Certificate(cred_dict)
 else:
-    # Local (PC): Lê do arquivo
+    # Local (Seu PC)
     cred = credentials.Certificate('secrets/firebase_key.json')
 
-firebase_admin.initialize_app(cred, {
-    'databaseURL': 'https://masters-codex-default-rtdb.firebaseio.com/'
-})
+# Só inicializa se não existir um app rodando
+if not firebase_admin._apps:
+    firebase_admin.initialize_app(cred, {
+        'databaseURL': 'https://masters-codex-default-rtdb.firebaseio.com/'
+    })
 
 def save_user(user):
-    ref = db.reference(
-        f"users/{user.id}"
-    )
-
-    ref.set(
-        user.to_dict()
-    )
-
+    ref = db.reference(f"users/{user.id}")
+    ref.set(user.to_dict())
     return user.id
 
 def get_user(user_id):
-    ref = db.reference(
-        f"users/{user_id}"
-    )
-
+    ref = db.reference(f"users/{user_id}")
     data = ref.get()
 
     if data is None:
@@ -44,17 +44,13 @@ def get_user(user_id):
 
     if user_type == "master":
         return MasterUser.from_dict(data)
-
     if user_type == "player":
         return PlayerUser.from_dict(data)
 
-    raise ValueError(
-        f"Tipo de usuário inválido: {user_type}"
-    )
+    raise ValueError(f"Tipo de usuário inválido: {user_type}")
 
 def get_user_by_username(username):
     username = username.strip()
-
     if username == "":
         return None
 
@@ -70,39 +66,24 @@ def get_user_by_username(username):
 
             if user_type == "master":
                 return MasterUser.from_dict(user_data)
-
             if user_type == "player":
                 return PlayerUser.from_dict(user_data)
 
-            raise ValueError(
-                f"Tipo de usuário inválido: {user_type}"
-            )
+            raise ValueError(f"Tipo de usuário inválido: {user_type}")
 
     return None
 
 def delete_user(user_id):
-    ref = db.reference(
-        f"users/{user_id}"
-    )
-
+    ref = db.reference(f"users/{user_id}")
     ref.delete()
 
 def save_table(table):
-    ref = db.reference(
-        f"tables/{table.id}"
-    )
-
-    ref.set(
-        table.to_dict()
-    )
-
+    ref = db.reference(f"tables/{table.id}")
+    ref.set(table.to_dict())
     return table.id
 
 def get_table(table_id):
-    ref = db.reference(
-        f"tables/{table_id}"
-    )
-
+    ref = db.reference(f"tables/{table_id}")
     data = ref.get()
 
     if data is None:
@@ -111,28 +92,16 @@ def get_table(table_id):
     return Table.from_dict(data)
 
 def delete_table(table_id):
-    ref = db.reference(
-        f"tables/{table_id}"
-    )
-
+    ref = db.reference(f"tables/{table_id}")
     ref.delete()
 
 def save_entity(entity):
-    ref = db.reference(
-        f"entities/{entity.id}"
-    )
-
-    ref.set(
-        entity.to_dict()
-    )
-
+    ref = db.reference(f"entities/{entity.id}")
+    ref.set(entity.to_dict())
     return entity.id
 
 def get_entity(entity_id):
-    ref = db.reference(
-        f"entities/{entity_id}"
-    )
-
+    ref = db.reference(f"entities/{entity_id}")
     data = ref.get()
 
     if data is None:
@@ -142,46 +111,29 @@ def get_entity(entity_id):
 
     if entity_type == "player":
         return Player.from_dict(data)
-
     if entity_type == "monster":
         return Monster.from_dict(data)
-
     if entity_type == "npc":
         return NPC.from_dict(data)
 
-    raise ValueError(
-        f"Tipo de entidade inválido: {entity_type}"
-    )
+    raise ValueError(f"Tipo de entidade inválido: {entity_type}")
 
 def delete_entity(entity_id):
-    ref = db.reference(
-        f"entities/{entity_id}"
-    )
-
+    ref = db.reference(f"entities/{entity_id}")
     ref.delete()
 
 def entity_exists(entity_id):
-    ref = db.reference(
-        f"entities/{entity_id}"
-    )
-
+    ref = db.reference(f"entities/{entity_id}")
     return ref.get() is not None
 
 def table_exists(table_id):
-    ref = db.reference(
-        f"tables/{table_id}"
-    )
-
+    ref = db.reference(f"tables/{table_id}")
     return ref.get() is not None
 
 def user_exists(user_id):
-    ref = db.reference(
-        f"users/{user_id}"
-    )
-
+    ref = db.reference(f"users/{user_id}")
     return ref.get() is not None
 
 def ping_database():
     ref = db.reference("/")
-
     return ref.get()
