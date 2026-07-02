@@ -123,7 +123,6 @@ def get_table_info(table_id):
     for ent_id in table.entity_ids:
         ent = load_entity(ent_id)
         if ent:
-            # ADICIONADO: "id": ent.id
             entities_details.append({"id": ent.id, "name": ent.name, "type": getattr(ent, 'entity_type', 'Desconhecido'), "hp": ent.current_hp})
             
     return jsonify({
@@ -183,4 +182,13 @@ def perform_combat_action():
     try:
         if getattr(ent, 'entity_type', '') == 'monster':
             action_result = ent.perform_action(action_name=action_name, dice_result=dice_result)
-            log_message = f"{ent.name} atacou com um
+            log_message = f"{ent.name} atacou com um D{dice_type} e tirou ({dice_result})! Total com bônus: {action_result['total']} de dano {action_result.get('damage_type', '')}."
+        else:
+            log_message = f"{ent.name} rolou um D{dice_type} e tirou {dice_result}."
+            
+        return jsonify({"status": "success", "roll": dice_result, "log": log_message})
+    except Exception as e:
+        return jsonify({"status": "error", "message": f"Erro na ação da classe: {str(e)}"}), 500
+
+if __name__ == '__main__':
+    app.run(debug=True)
